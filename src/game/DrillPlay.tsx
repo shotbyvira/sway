@@ -15,7 +15,7 @@ import {
 } from "./engine";
 import { netWord, pullCaption, spreadWord, useSea } from "./FishingStage";
 import { play } from "./sound";
-import { DEAL_MS, NAME_MS } from "./rules";
+import { DEAL_MS, NAME_MS, REVEAL_MS } from "./rules";
 
 type Phase = "deal" | "name" | "reveal";
 
@@ -34,6 +34,8 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   const [query, setQuery] = useState("");
   const [leftMs, setLeftMs] = useState(DEAL_MS);
   const [picked, setPicked] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [revealLeft, setRevealLeft] = useState(REVEAL_MS);
   const memoryRef = useRef<PromptMemory>(emptyMemory());
   const lockRef = useRef(false);
   const deadlineRef = useRef(performance.now() + DEAL_MS);
@@ -116,10 +118,27 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
     onScore(scored.fisheries);
     play(scored.fisheries >= 80 ? "catch" : scored.fisheries > 0 ? "tight" : "miss");
     setPhase("reveal");
+    setPaused(false);
+    setRevealLeft(REVEAL_MS);
   }
 
-  const scored = phase === "reveal" ? roundScore(picked, secret.id, scores) : null;
+  useEffect(() => {
+    if (phase !== "reveal" || paused) return;
+    const started = performance.now();
+    const from = revealLeft;
+    let frame = 0;
+    const loop = (now: number) => {
+      const remain = Math.max(0, from - (now - started));
+      setRevealLeft(remain);
+      if (remain > 0) frame = requestAnimationFrame(loop);
+    };
+    frame = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(frame);
+    // Restart only when play or pause changes. revealLeft is the frozen value at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, paused]);
   const guess = picked ? findWord(picked) : undefined;
+  const scored = phase === "reveal" ? roundScore(picked, secret.id, scores) : null;
   useSea({
     depth: "dive",
     net,
@@ -193,13 +212,27 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
 
       {phase === "reveal" && scored && (
         <div className="mt-4">
-          <p className="font-display text-5xl leading-none text-fg">{scored.fisheries}</p>
-          <p className="mt-2 text-lg text-fg">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="font-display text-5xl leading-none text-fg">{scored.fisheries}</p>
+            <p className={"tabular-nums " + (paused ? "text-muted" : revealLeft <= 3000 ? "text-warn" : "text-tide")}>
+              {formatClock(revealLeft)}
+            </p>
+          </div>
+          <div className={"px-meter mt-2 " + (revealLeft <= 3000 && !paused ? "warn" : "")}>
+            <div
+              className={"h-full " + (paused ? "bg-fg" : revealLeft <= 3000 ? "bg-warn" : "bg-tide")}
+              style={{ width: `${Math.max(0, Math.min(100, (revealLeft / REVEAL_MS) * 100))}%` }}
+            />
+          </div>
+          <p className="mt-3 text-lg text-fg">
             {picked && picked === secret.id ? "Caught." : guess ? `You named ${guess.name}.` : "The clock took the guess."}
           </p>
           <p className="mt-2 text-sm text-muted">
             The fish was {secret.name}. It finished #{scored.rank}. Fisheries {scored.fisheries}, school {scored.school}.
           </p>
+          <button type="button" onClick={() => setPaused((value) => !value)} className="px-chip mt-3 min-h-12 px-3">
+            {paused ? "Resume" : "Pause"}
+          </button>
         </div>
       )}
 

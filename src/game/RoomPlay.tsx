@@ -10,6 +10,7 @@ import {
   chooseTeamFn,
   createRoomFn,
   feedClueFn,
+  holdRevealFn,
   joinRoomFn,
   leaveRoomFn,
   nameWordFn,
@@ -92,6 +93,7 @@ export function RoomPlay({
   const chooseDeal = useServerFn(chooseDealFn);
   const nameWord = useServerFn(nameWordFn);
   const advanceRoom = useServerFn(advanceRoomFn);
+  const holdReveal = useServerFn(holdRevealFn);
   const rematchRoom = useServerFn(rematchRoomFn);
   const leaveRoom = useServerFn(leaveRoomFn);
 
@@ -225,7 +227,8 @@ export function RoomPlay({
   }, [room?.amberName, room?.tideName, room]);
 
   useEffect(() => {
-    if (!room?.deadline || (room.status !== "clue" && room.status !== "deal" && room.status !== "name")) return;
+    if (!room || room.holdMs != null) return;
+    if (!room?.deadline || (room.status !== "clue" && room.status !== "deal" && room.status !== "name" && room.status !== "reveal")) return;
     closedRef.current = false;
     let frame = 0;
     let last = -1;
@@ -251,7 +254,7 @@ export function RoomPlay({
     };
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [room?.status, room?.deadline, room?.code]);
+  }, [room?.status, room?.deadline, room?.code, room?.holdMs]);
 
   async function run(task: () => Promise<RoomResponse>) {
     if (pendingRef.current) return;
@@ -391,7 +394,7 @@ export function RoomPlay({
   }
 
   const note = splitNote(room.players);
-  const leftMs = room.deadline != null ? Math.max(0, room.deadline - Date.now()) : 0;
+  const leftMs = room.holdMs != null ? room.holdMs : room.deadline != null ? Math.max(0, room.deadline - Date.now()) : 0;
   void tick;
   const skipper = room.players.find((player) => player.id === room.skipperId);
   const fishName = room.fisheries ? sideLabel(room.fisheries, room) : "";
@@ -594,6 +597,8 @@ export function RoomPlay({
               fishName={fishName}
               schoolName={schoolName}
               pending={pending}
+              leftMs={leftMs}
+              onHold={() => void run(() => holdReveal({ data: { code: room.code, playerId: playerIdRef.current } }))}
               onNext={() => void run(() => advanceRoom({ data: { code: room.code, playerId: playerIdRef.current } }))}
             />
           )}
@@ -828,20 +833,35 @@ function RevealPanel({
   fishName,
   schoolName,
   pending,
+  leftMs,
+  onHold,
   onNext,
 }: {
   room: RoomView;
   fishName: string;
   schoolName: string;
   pending: boolean;
+  leftMs: number;
+  onHold: () => void;
   onNext: () => void;
 }) {
   const result = room.result!;
   const caught = result.guessName === result.secretName;
+  const paused = room.holdMs != null;
+  const clockMs = room.clockMs ?? 10_000;
   return (
     <div className="mt-4">
-      <p className="px-head">{caught ? "Caught" : "It slipped"}</p>
-      <p className="mt-2 text-lg text-fg">The fish was {result.secretName}.</p>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="px-head">{caught ? "Caught" : "It slipped"}</p>
+        <p className={"tabular-nums " + (paused ? "text-muted" : leftMs <= 3000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</p>
+      </div>
+      <div className={"px-meter mt-2 " + (leftMs <= 3000 && !paused ? "warn" : "")}>
+        <div
+          className={"h-full " + (paused ? "bg-fg" : leftMs <= 3000 ? "bg-warn" : "bg-tide")}
+          style={{ width: `${Math.max(0, Math.min(100, (leftMs / clockMs) * 100))}%` }}
+        />
+      </div>
+      <p className="mt-3 text-lg text-fg">The fish was {result.secretName}.</p>
       <p className="mt-1 text-sm text-muted">
         {result.guessName === "—" ? "No name in time." : `The skipper said ${result.guessName}.`} It finished #{result.rank}.
       </p>
@@ -854,9 +874,15 @@ function RevealPanel({
           Fisheries were shown {room.blurs.fisheries}. The school was shown {room.blurs.school}.
         </p>
       )}
-      <button type="button" disabled={pending} onClick={onNext} className="px-btn mt-4 min-h-12 w-full px-4 disabled:opacity-40">
-        {room.round >= room.rounds ? "See the match" : "Next cast"}
-      </button>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button type="button" disabled={pending} onClick={onHold} className="px-chip min-h-12 px-3 disabled:opacity-40">
+          {paused ? "Resume" : "Pause"}
+        </button>
+        <button type="button" disabled={pending} onClick={onNext} className="px-btn min-h-12 px-4 disabled:opacity-40">
+          {room.round >= room.rounds ? "See the match" : "Next cast"}
+        </button>
+      </div>
+      <p className="mt-2 text-sm text-muted">{paused ? "The clock is held." : "Ten seconds, then the next cast. Anyone can pause."}</p>
     </div>
   );
 }

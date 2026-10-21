@@ -202,12 +202,12 @@ function SoundButton() {
 }
 
 const PLAY_STEPS = [
-  "Make a room and share the code. Two teams, at least two a side, four or more, sides within one player. Everyone plays from their own phone.",
-  "A toss picks who is Fisheries first. A compass picks their skipper. Later rounds swap sides. The compass won't pick the same skipper twice until that side has all had the net.",
-  "The app hides the fish. The school sees a near lookalike. Fisheries crew see a farther one. The skipper sees neither.",
-  "Forty-five seconds. Everyone except the skipper casts up to three lines, all at once. Accepted lines go in the boat. Dead water — words the engine doesn't know — still costs a cast. Naming the fish, your lookalike, or a twin is rejected, and you can try again.",
-  "Up to five deals, twelve seconds each. Two unlabeled lines. The skipper taps one. That line hits the water. The other splashes. Nobody sees the word. The net grows if the fish stays close. The school spreads when the school's lines disagree.",
-  "Fifteen seconds. The skipper names it from the top of the net or a search. Then the fish is shown. Sides swap. Play one, two, or three times each. Higher total wins.",
+  "Make a room and share the code. Two crews, at least two a side, and the sides stay within one player. Everyone plays on their own phone.",
+  "A toss chooses which crew holds the net first. A compass chooses their skipper. The crews swap every round, and a skipper isn't picked twice until that whole crew has held the net.",
+  "The fish stays hidden. The school sees a near lookalike. Fisheries see one farther away. The skipper sees neither.",
+  "Forty-five seconds. Everyone except the skipper casts up to three lines, all at once. A line the water knows goes in the boat. A word it doesn't know is dead water, and it still costs a cast. Naming the fish, your lookalike, or its twin is thrown back. You can try again.",
+  "Up to five deals, twelve seconds each. Two lines, and neither is labeled. The skipper taps one. That line hits the water. The other one splashes. A close fish makes the net wider and deeper. Lines that disagree spread the school sideways.",
+  "Fifteen seconds to name the fish, from the top of the net or a search. Then everyone sees it. A ten-second clock starts. Anyone can pause it. When it ends, the next cast begins. Play one, two, or three times each. The higher total wins.",
 ];
 
 function HowToPlay() {

@@ -24,6 +24,7 @@ import {
   MAX_PLAYERS,
   MIN_SIDE,
   NAME_MS,
+  REVEAL_MS,
   otherSide,
   type Side,
 } from "./rules";
@@ -79,6 +80,7 @@ export type RoomView = {
   chips: { id: string; name: string }[];
   deadline: number | null;
   clockMs: number | null;
+  holdMs: number | null;
   clues: RoomClue[];
   slotsLeft: number;
   boat: { fisheries: number; school: number };
@@ -124,6 +126,7 @@ type Meta = {
   lastPull: Pull;
   pulls: number;
   guessId: string | null;
+  holdMs: number | null;
 };
 
 type RoomRow = {
@@ -238,6 +241,7 @@ function emptyMeta(first: Side | null = null): Meta {
     lastPull: "idle",
     pulls: 0,
     guessId: null,
+    holdMs: null,
   };
 }
 
@@ -260,6 +264,7 @@ function metaFrom(value: unknown): Meta {
     lastPull: pull === "tight" || pull === "bolt" || pull === "miss" ? pull : "idle",
     pulls: Number.isFinite(Number(raw.pulls)) ? Number(raw.pulls) : 0,
     guessId: typeof raw.guessId === "string" ? raw.guessId : null,
+    holdMs: Number.isFinite(Number(raw.holdMs)) ? Math.max(0, Number(raw.holdMs)) : null,
   };
 }
 
@@ -290,6 +295,7 @@ function clockFor(status: string): number | null {
   if (status === "clue") return CLUE_MS;
   if (status === "deal") return DEAL_MS;
   if (status === "name") return NAME_MS;
+  if (status === "reveal") return REVEAL_MS;
   return null;
 }
 
@@ -424,6 +430,7 @@ async function openRound(
     lastPull: "idle",
     pulls: 0,
     guessId: null,
+    holdMs: null,
   };
   const updated = await sql<{ version: number }>`
     update sway_rooms
@@ -491,6 +498,7 @@ async function closeClue(sql: Sql, room: RoomRow): Promise<boolean> {
     lastPull: "idle",
     pulls: 0,
     guessId: null,
+    holdMs: null,
   };
   const status = deals.length > 0 ? "deal" : "name";
   const deadline = Date.now() + (deals.length > 0 ? DEAL_MS : NAME_MS);
@@ -595,10 +603,11 @@ async function finishName(sql: Sql, room: RoomRow, guessId: string | null): Prom
   if (!room.secret_id) return false;
   const word = guessId ? findWord(guessId) : undefined;
   const stored = word?.id ?? null;
-  const meta = { ...metaFrom(room.meta), guessId: stored };
+  const meta = { ...metaFrom(room.meta), guessId: stored, holdMs: null };
+  const deadline = Date.now() + REVEAL_MS;
   const updated = await sql<{ version: number }>`
     update sway_rooms
-    set status = 'reveal', deadline = null, meta = ${json(meta)}::jsonb, version = version + 1
+    set status = 'reveal', deadline = ${deadline}, meta = ${json(meta)}::jsonb, version = version + 1
     where code = ${room.code} and version = ${room.version} and status = 'name'
     returning version
   `;
@@ -636,6 +645,10 @@ async function expireIfNeeded(sql: Sql, code: string): Promise<void> {
     }
     if (room.status === "name" && timedOut) {
       if (!(await finishName(sql, room, null))) continue;
+      return;
+    }
+    if (room.status === "reveal" && timedOut) {
+      if (!(await advanceReveal(sql, room))) continue;
       return;
     }
     return;
@@ -719,7 +732,7 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       else if (team === school) boat.school += 1;
     }
   }
-  const timed = room.status === "clue" || room.status === "deal" || room.status === "name";
+  const timed = room.status === "clue" || room.status === "deal" || room.status === "name" || room.status === "reveal";
   const current = meta.deals[meta.deal];
   const deal: RoomDeal | null =
     room.status === "deal" && current
@@ -782,6 +795,7 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       chips,
       deadline: timed && room.deadline ? Number(room.deadline) : null,
       clockMs: clockFor(status),
+      holdMs: status === "reveal" ? meta.holdMs : null,
       clues,
       slotsLeft: Math.max(0, CLUES_PER - (you?.used ?? 0)),
       boat,
@@ -1049,6 +1063,28 @@ export const nameWordFn = createServerFn({ method: "POST" })
     return viewOf(sql, code, data.playerId);
   });
 
+async function advanceReveal(sql: Sql, room: RoomRow): Promise<boolean> {
+  const meta = metaFrom(room.meta);
+  let cycle = Number(room.cycle);
+  let half = Number(room.half);
+  let done = false;
+  if (half === 0) half = 1;
+  else if (cycle < Number(room.cycles)) {
+    cycle += 1;
+    half = 0;
+  } else done = true;
+  if (done) {
+    const updated = await sql<{ version: number }>`
+      update sway_rooms
+      set status = 'match', deadline = null, version = version + 1
+      where code = ${room.code} and version = ${room.version} and status = 'reveal'
+      returning version
+    `;
+    return updated.length > 0;
+  }
+  return openRound(sql, room, cycle, half, meta, "reveal");
+}
+
 export const advanceRoomFn = createServerFn({ method: "POST" })
   .validator(z.object({ code: codeSchema, playerId: seatSchema }))
   .handler(async ({ data }): Promise<RoomResponse> => {
@@ -1062,26 +1098,40 @@ export const advanceRoomFn = createServerFn({ method: "POST" })
         select id from sway_players where id = ${data.playerId} and room_code = ${code}
       `;
       if (seated.length === 0) return { ok: false, error: "You're not in this room." };
+      if (await advanceReveal(sql, room)) return viewOf(sql, code, data.playerId);
+    }
+    return viewOf(sql, code, data.playerId);
+  });
+
+export const holdRevealFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const sql = await getSql();
+    const code = data.code.toUpperCase();
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const room = await loadRoom(sql, code);
+      if (!room) return { ok: false, error: "No room with that code." };
+      if (room.status !== "reveal") return viewOf(sql, code, data.playerId);
+      const seated = await sql<{ id: string }>`
+        select id from sway_players where id = ${data.playerId} and room_code = ${code}
+      `;
+      if (seated.length === 0) return { ok: false, error: "You're not in this room." };
       const meta = metaFrom(room.meta);
-      let cycle = Number(room.cycle);
-      let half = Number(room.half);
-      let done = false;
-      if (half === 0) half = 1;
-      else if (cycle < Number(room.cycles)) {
-        cycle += 1;
-        half = 0;
-      } else done = true;
-      if (done) {
-        const updated = await sql<{ version: number }>`
-          update sway_rooms
-          set status = 'match', deadline = null, version = version + 1
-          where code = ${code} and version = ${room.version} and status = 'reveal'
-          returning version
-        `;
-        if (updated.length > 0) return viewOf(sql, code, data.playerId);
-        continue;
-      }
-      if (await openRound(sql, room, cycle, half, meta, "reveal")) return viewOf(sql, code, data.playerId);
+      const paused = meta.holdMs != null;
+      const remain = paused
+        ? meta.holdMs
+        : room.deadline != null
+          ? Math.max(0, Number(room.deadline) - Date.now())
+          : REVEAL_MS;
+      const next = { ...meta, holdMs: paused ? null : remain };
+      const deadline = paused ? Date.now() + (remain ?? 0) : null;
+      const updated = await sql<{ version: number }>`
+        update sway_rooms
+        set deadline = ${deadline}, meta = ${json(next)}::jsonb, version = version + 1
+        where code = ${code} and version = ${room.version} and status = 'reveal'
+        returning version
+      `;
+      if (updated.length > 0) return viewOf(sql, code, data.playerId);
     }
     return viewOf(sql, code, data.playerId);
   });
