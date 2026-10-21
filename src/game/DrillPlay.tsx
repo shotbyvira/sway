@@ -13,7 +13,7 @@ import {
   topN,
   type PromptMemory,
 } from "./engine";
-import { FishingStage } from "./FishingStage";
+import { netWord, pullCaption, spreadWord, useSea } from "./FishingStage";
 import { play } from "./sound";
 import { DEAL_MS, NAME_MS } from "./rules";
 
@@ -120,6 +120,13 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
 
   const scored = phase === "reveal" ? roundScore(picked, secret.id, scores) : null;
   const guess = picked ? findWord(picked) : undefined;
+  useSea({
+    depth: "dive",
+    net,
+    spread: 0.42,
+    pull,
+    secretName: phase === "reveal" ? secret.name : null,
+  });
 
   return (
     <section className="rise flex flex-1 flex-col">
@@ -132,10 +139,11 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
           <p className={"tabular-nums " + (leftMs <= 5000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</p>
         )}
       </div>
-      <div className="mt-3">
-        <FishingStage net={net} spread={0.34} pull={pull} secretName={phase === "reveal" ? secret.name : null} />
-      </div>
-      <p className="mt-3 text-sm leading-relaxed text-muted">
+      <div className="min-h-[34vh] flex-1" />
+      <p className="text-sm text-muted">
+        {pullCaption(pull)} {netWord(net)} · {spreadWord(0.42)}
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-muted">
         You are the skipper. You do not know the fish. Tap the line you trust. The other one splashes.
       </p>
 

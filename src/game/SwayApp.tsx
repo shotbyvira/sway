@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DrillPlay } from "./DrillPlay";
 import { wordCount } from "./engine";
+import { SeaProvider } from "./FishingStage";
 import { RoomPlay } from "./RoomPlay";
 import { recalledRoom } from "./seat";
 import { play, setMuted } from "./sound";
@@ -48,7 +49,8 @@ export function SwayApp() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-6 sm:px-6 sm:py-10">
+    <SeaProvider>
+    <main className="relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-6 sm:px-6 sm:py-10">
       <header className="mb-8 flex items-center justify-between gap-3">
         <button type="button" onClick={goHome} className="text-left">
           <p className="text-sm tracking-[0.42em] text-tide uppercase glow">Sway</p>
@@ -72,7 +74,8 @@ export function SwayApp() {
             Two crews, one hidden fish. The school tries to swim it clear. Fisheries try to drop the net on it. Only the
             skipper gets to name it.
           </p>
-          <div className="mt-8 flex w-full flex-col gap-4">
+          <div className="min-h-[28vh] flex-1" />
+          <div className="flex w-full flex-col gap-4">
             <button
               type="button"
               onClick={() => {
@@ -111,7 +114,7 @@ export function SwayApp() {
           {rulesOpen && (
             <div className="px-panel rise mt-4 p-4 text-left text-base leading-relaxed text-muted">
               <p>Every word sits on a grid of traits. A cast is a claim. Honest traits pull that shape up. A lie is doubted, and the fish hauls itself back.</p>
-              <p className="mt-3">The net on screen grows only after a deal actually pulls the fish closer. A school that disagrees spreads out. A school that agrees packs tight.</p>
+              <p className="mt-3">The net widens and sinks toward the school only after a deal pulls the fish closer. A school that disagrees spreads sideways. Where they overlap is how close the catch is.</p>
             </div>
           )}
           <HowToPlay />
@@ -131,6 +134,7 @@ export function SwayApp() {
 
       {phase === "drill" && <DrillPlay onExit={goHome} onScore={rememberBest} />}
     </main>
+    </SeaProvider>
   );
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Copy, Search } from "lucide-react";
-import { FishingStage, pullCaption } from "./FishingStage";
+import { netWord, pullCaption, spreadWord, useSea } from "./FishingStage";
 import { searchWords } from "./engine";
 import {
   advanceRoomFn,
@@ -317,6 +317,14 @@ export function RoomPlay({
   }
 
   const found = useMemo(() => (query.trim() ? searchWords(query).slice(0, 6) : []), [query]);
+  const diving = room != null && room.status !== "lobby";
+  useSea({
+    depth: diving ? "dive" : "surface",
+    net: room?.net ?? 0.28,
+    spread: room?.spread ?? 0.62,
+    pull: room?.pull ?? "idle",
+    secretName: room?.status === "reveal" ? room.secret : null,
+  });
 
   if (!room) {
     return (
@@ -516,15 +524,11 @@ export function RoomPlay({
             />
           )}
 
-          {(room.status === "clue" || room.status === "deal" || room.status === "name" || room.status === "reveal") && (
-            <div className="mt-3">
-              <FishingStage
-                net={room.net}
-                spread={room.spread}
-                pull={room.pull}
-                secretName={room.status === "reveal" ? room.secret : null}
-              />
-            </div>
+          <div className="min-h-[34vh] flex-1" />
+          {diving && (
+            <p className="text-sm text-muted">
+              {pullCaption(room.pull)} {netWord(room.net)} · {spreadWord(room.spread)}
+            </p>
           )}
 
           {room.deadline != null && room.status !== "reveal" && room.status !== "cast" && (

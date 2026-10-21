@@ -54,9 +54,8 @@
     z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 80% 46% at 50% -12%, rgba(77, 227, 255, 0.2), transparent 58%),
-      radial-gradient(ellipse 70% 36% at 50% 118%, rgba(10, 40, 78, 0.85), transparent 60%),
-      var(--color-bg);
+      radial-gradient(ellipse 80% 46% at 50% -12%, rgba(77, 227, 255, 0.16), transparent 58%),
+      linear-gradient(180deg, rgba(5, 10, 20, 0.28), transparent 20%, transparent 74%, rgba(5, 10, 20, 0.45));
   }
 
   body::after {
@@ -453,8 +452,67 @@
   flex: none;
 }
 
-.stage-frame {
-  position: relative;
+.sea-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #050a14;
+}
+
+.sea-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.trailer-float {
+  animation: trailer-float 3.6s ease-in-out infinite;
+}
+
+.web-line {
+  stroke-dasharray: 10 7;
+  animation: web-flow 2.8s linear infinite;
+}
+
+.web-line-down {
+  animation-duration: 3.6s;
+  animation-direction: reverse;
+}
+
+.sea-wave {
+  animation: sea-wave 8s ease-in-out infinite;
+}
+
+.sea-wave-slow {
+  animation-duration: 12s;
+}
+
+@keyframes trailer-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes web-flow {
+  to {
+    stroke-dashoffset: -68;
+  }
+}
+
+@keyframes sea-wave {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-28px);
+  }
 }
 
 .stage-frame::after {
@@ -518,7 +576,10 @@ button.bg-fg {
   .school-dart,
   .school-haul,
   .puffer,
-  .stage-shake {
+  .stage-shake,
+  .trailer-float,
+  .web-line,
+  .sea-wave {
     animation: none;
     transition: none;
   }
