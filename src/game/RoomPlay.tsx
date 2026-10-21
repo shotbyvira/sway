@@ -368,7 +368,7 @@ export function RoomPlay({
             />
           </label>
         )}
-        {error && <p className="mt-4 text-sm text-heat">{error}</p>}
+        {error && <p className="mt-4 text-sm text-warn">{error}</p>}
         <button
           type="button"
           disabled={pending}
@@ -467,7 +467,7 @@ export function RoomPlay({
             ))}
           </div>
           <p className="mt-3 text-sm text-muted">{note.text} Sides swap after each catch, and the crews stay put.</p>
-          {error && <p className="mt-3 text-sm text-heat">{error}</p>}
+          {error && <p className="mt-3 text-sm text-warn">{error}</p>}
           <button
             type="button"
             disabled={pending || !note.ok}
@@ -603,7 +603,7 @@ export function RoomPlay({
             />
           )}
 
-          {error && <p className="mt-3 text-sm text-heat">{error}</p>}
+          {error && <p className="mt-3 text-sm text-warn">{error}</p>}
           <button type="button" onClick={exitRoom} className="mt-4 min-h-11 text-sm text-muted">
             Leave room
           </button>
@@ -888,7 +888,14 @@ function MatchPanel({ room, pending, onRematch }: { room: RoomView; pending: boo
   );
 }
 
-const SEAT_COLORS = ["#4de3ff", "#ff5d8f", "#ffd166", "#ff9f43", "#e8f1ff", "#bfa7ff"];
+const SEAT_COLORS = [
+  "var(--color-tide)",
+  "var(--color-amber)",
+  "var(--color-gold)",
+  "var(--color-warn)",
+  "var(--color-fg)",
+  "var(--color-deep)",
+];
 
 function TeamColumn({
   tone,

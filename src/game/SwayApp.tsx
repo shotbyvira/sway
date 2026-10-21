@@ -60,6 +60,7 @@ export function SwayApp() {
             {best != null ? `Best catch ${best}` : "4+ · own phones"}
           </p>
           <SoundButton />
+          <ContrastButton />
         </div>
       </header>
 
@@ -130,6 +131,40 @@ export function SwayApp() {
 
       {phase === "drill" && <DrillPlay onExit={goHome} onScore={rememberBest} />}
     </main>
+  );
+}
+
+function ContrastButton() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sway.contrast") === "1";
+      setOn(stored);
+      document.documentElement.dataset.contrast = stored ? "1" : "0";
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  return (
+    <button
+      type="button"
+      className={"px-mute " + (on ? "" : "off")}
+      aria-pressed={on}
+      aria-label={on ? "Use the regular palette" : "Boost the palette"}
+      onClick={() => {
+        const next = !on;
+        setOn(next);
+        document.documentElement.dataset.contrast = next ? "1" : "0";
+        try {
+          localStorage.setItem("sway.contrast", next ? "1" : "0");
+        } catch {
+          /* ignore */
+        }
+        play("tap");
+      }}
+    >
+      {on ? "Clear" : "Boost"}
+    </button>
   );
 }
 

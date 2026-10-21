@@ -1,7 +1,15 @@
 export type WaterPull = "idle" | "tight" | "bolt" | "miss";
 
 const ANGLES = [12, 58, 104, 156, 208, 254, 312];
-const TINTS = ["#4de3ff", "#ff5d8f", "#ffd166", "#e8f1ff", "#ff9f43", "#7deaff", "#bfa7ff"];
+const TINTS = [
+  "var(--color-tide)",
+  "var(--color-amber)",
+  "var(--color-gold)",
+  "var(--color-fg)",
+  "var(--color-warn)",
+  "var(--color-schooler)",
+  "var(--color-deep)",
+];
 const BUBBLES = [18, 70, 124, 168, 214, 262, 310];
 
 export function pullCaption(pull: WaterPull): string {
@@ -64,12 +72,12 @@ export function FishingStage({
               cx={x}
               cy={176 - (index % 3) * 8}
               r={1.4 + (index % 3) * 0.7}
-              fill="#4de3ff"
+              fill="var(--color-tide)"
               style={{ animationDelay: `${index * 0.55}s`, animationDuration: `${3.4 + (index % 4) * 0.45}s` }}
             />
           ))}
           <rect x="10" y="64" width="52" height="78" fill="#123048" stroke="#4de3ff" strokeWidth="2" />
-          <text x="36" y="108" textAnchor="middle" fill="#7d93b8" fontSize="11" fontFamily="VT323, monospace">
+          <text x="36" y="108" textAnchor="middle" fill="var(--color-muted)" fontSize="11" fontFamily="VT323, monospace">
             trailer
           </text>
           <g className="fish-drift" style={{ transform: `translate(${netX}px, 128px)` }}>
@@ -96,7 +104,7 @@ export function FishingStage({
               })}
               <Puffer x={0} y={0} puff={clampedNet} face={face} />
               {secretName ? (
-                <text y="42" textAnchor="middle" fill="#ffd166" fontSize="14" fontFamily="VT323, monospace">
+                <text y="42" textAnchor="middle" fill="var(--color-gold)" fontSize="14" fontFamily="VT323, monospace">
                   {secretName}
                 </text>
               ) : null}
@@ -149,16 +157,16 @@ function Puffer({ x, y, puff, face }: { x: number; y: number; puff: number; face
   return (
     <g transform={`translate(${x} ${y}) scale(${face} 1)`}>
       <g className="puffer">
-        <ellipse className="swimmer-glow" cx="0" cy="0" rx={body + 10} ry={body * 0.8} fill="#ffd166" />
+        <ellipse className="swimmer-glow" cx="0" cy="0" rx={body + 10} ry={body * 0.8} fill="var(--color-gold)" />
         {angles.map((angle) => {
           const rad = (angle * Math.PI) / 180;
           const ix = Math.cos(rad) * (body - 2);
           const iy = Math.sin(rad) * (body * 0.72);
           const ox = Math.cos(rad) * spike;
           const oy = Math.sin(rad) * spike * 0.72;
-          return <polygon key={angle} points={`${ix},${iy - 2.2} ${ox},${oy} ${ix},${iy + 2.2}`} fill="#ffd166" />;
+          return <polygon key={angle} points={`${ix},${iy - 2.2} ${ox},${oy} ${ix},${iy + 2.2}`} fill="var(--color-gold)" />;
         })}
-        <ellipse cx="0" cy="0" rx={body} ry={body * 0.72} fill="#ffd166" />
+        <ellipse cx="0" cy="0" rx={body} ry={body * 0.72} fill="var(--color-gold)" />
         <ellipse cx="0" cy="1" rx={body * 0.55} ry={body * 0.28} fill="#ffe7a3" opacity="0.55" />
         <circle cx={body * 0.35} cy={-2} r="1.7" fill="#04141c" />
       </g>
