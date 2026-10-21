@@ -325,12 +325,7 @@ export function RoomPlay({
               type="button"
               onClick={() => setTeam(side)}
               className={
-                "min-h-12 border font-medium " +
-                (team === side
-                  ? side === "amber"
-                    ? "border-amber bg-amber text-amber-ink"
-                    : "border-tide bg-tide text-tide-ink"
-                  : "border-line bg-surface text-fg")
+                "px-key min-h-12 " + (team === side ? (side === "amber" ? "on-amber" : "on-tide") : "")
               }
             >
               {side === "amber" ? "Amber" : "Tide"}
@@ -380,7 +375,7 @@ export function RoomPlay({
         <div className="rise flex flex-1 flex-col">
           <p className="text-xs tracking-widest text-muted uppercase">Room</p>
           <div className="mt-1 flex items-center justify-between gap-3">
-            <p className="glow font-display text-6xl tracking-[0.22em]">{room.code}</p>
+            <p className="px-code font-display text-6xl">{room.code}</p>
             <button type="button" onClick={() => void copyCode()} className="px-chip inline-flex min-h-11 items-center gap-2 px-3 text-sm">
               <Copy className="size-4" aria-hidden="true" />
               {copied ? "Copied" : "Copy"}
@@ -518,11 +513,11 @@ export function RoomPlay({
                 <span className="tracking-widest text-muted uppercase">
                   {room.status === "clue" ? "Casts" : room.status === "deal" ? "Deal" : "Name it"}
                 </span>
-                <span className={"tabular-nums " + (leftMs <= 5000 ? "text-heat" : "text-tide")}>{formatClock(leftMs)}</span>
+                <span className={"tabular-nums " + (leftMs <= 5000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</span>
               </div>
-              <div className="mt-1 h-2 overflow-hidden bg-surface-2">
+              <div className={"px-meter mt-1 " + (leftMs <= 5000 ? "warn" : "")}>
                 <div
-                  className={"h-full " + (leftMs <= 5000 ? "bg-heat" : "bg-tide")}
+                  className={"h-full " + (leftMs <= 5000 ? "bg-warn" : "bg-tide")}
                   style={{ width: `${Math.max(0, Math.min(100, (leftMs / clockMs) * 100))}%` }}
                 />
               </div>
@@ -702,7 +697,7 @@ function CluePanel({
           {room.clues.map((clue, i) => (
             <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
               <span className="text-fg">{clue.text}</span>
-              <span className={clue.dead ? "text-heat" : "text-tide"}>{clue.dead ? "Dead water" : "Accepted"}</span>
+              <span className={clue.dead ? "text-warn" : "text-tide"}>{clue.dead ? "Dead water" : "Accepted"}</span>
             </li>
           ))}
         </ul>
@@ -738,12 +733,12 @@ function DealPanel({
               type="button"
               disabled={pending}
               onClick={() => onPick(card.id)}
-              className="px-panel min-h-16 px-3 py-3 text-left text-lg leading-snug text-fg disabled:opacity-40"
+              className="px-say min-h-16 px-3 py-3 text-left text-lg leading-snug disabled:opacity-40"
             >
               {card.text}
             </button>
           ) : (
-            <div key={card.id} className="px-panel min-h-16 px-3 py-3 text-lg leading-snug text-fg">
+            <div key={card.id} className="px-say min-h-16 px-3 py-3 text-lg leading-snug">
               {card.text}
               {deal.yours === card.id && <span className="ml-2 text-sm text-tide">Yours</span>}
             </div>
@@ -872,6 +867,8 @@ function MatchPanel({ room, pending, onRematch }: { room: RoomView; pending: boo
   );
 }
 
+const SEAT_COLORS = ["#4de3ff", "#ff5d8f", "#ffd166", "#ff9f43", "#e8f1ff", "#bfa7ff"];
+
 function TeamColumn({
   tone,
   name,
@@ -901,10 +898,13 @@ function TeamColumn({
         className="w-full bg-transparent text-lg text-fg outline-none"
       />
       <ul className="mt-2 space-y-1">
-        {players.map((player) => (
-          <li key={player.id} className="truncate text-sm text-muted">
-            {player.handle}
-            {player.id === youId ? " · you" : ""}
+        {players.map((player, index) => (
+          <li key={player.id} className="flex items-center gap-2 truncate text-sm">
+            <span className="seat-pip" style={{ background: SEAT_COLORS[index % SEAT_COLORS.length] }} />
+            <span className={player.id === youId ? "text-fg" : "text-muted"}>
+              {player.handle}
+              {player.id === youId ? " · you" : ""}
+            </span>
           </li>
         ))}
         {players.length === 0 && <li className="text-sm text-muted">Empty</li>}

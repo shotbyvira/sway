@@ -61,8 +61,8 @@ export function SwayApp() {
 
       {phase === "home" && (
         <section className="rise flex flex-1 flex-col items-center text-center">
-          <h1 className="font-display text-7xl leading-none tracking-[0.14em] text-fg glow sm:text-8xl">SWAY</h1>
-          <p className="mt-2 text-xl tracking-[0.28em] text-tide uppercase">Catch the big fish</p>
+          <h1 className="px-title font-display text-7xl sm:text-8xl">SWAY</h1>
+          <p className="px-tag mt-3 text-xl">Catch the big fish</p>
           <p className="mt-4 max-w-sm text-lg leading-relaxed text-muted">
             Two crews, one hidden fish. The school tries to swim it clear. Fisheries try to drop the net on it. Only the
             skipper gets to name it.
