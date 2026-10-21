@@ -190,4 +190,49 @@ button.bg-fg {
   body::after {
     animation: none;
   }
+
+  .compass-needle,
+  .fish-drift {
+    animation: none;
+    transition: none;
+  }
 }
+
+.compass {
+  width: 132px;
+  height: 132px;
+  margin: 16px auto;
+  border: 3px solid #4de3ff;
+  border-radius: 50%;
+  position: relative;
+  box-shadow:
+    0 0 0 6px #050a14,
+    0 0 0 8px #1b3050;
+}
+
+.compass-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 46px;
+  margin-left: -2px;
+  margin-top: -46px;
+  background: #ff5d8f;
+  transform-origin: 50% 100%;
+  animation: compass-spin 1.5s cubic-bezier(0.15, 0.8, 0.2, 1) both;
+}
+
+@keyframes compass-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(var(--land, 720deg));
+  }
+}
+
+.fish-drift {
+  transition: transform 700ms ease;
+}
+

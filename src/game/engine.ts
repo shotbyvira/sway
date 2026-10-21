@@ -323,3 +323,129 @@ export function randomWord(avoid?: string): Word {
   const index = Math.floor(Math.random() * pool.length);
   return pool[index] ?? WORDS[0]!;
 }
+
+/** Nearest other word for the school, and the closest word at least 0.45 away for fisheries. */
+export function standIns(secretId: string): { schoolId: string; fisheriesId: string } {
+  const ranked = WORDS.filter((word) => word.id !== secretId)
+    .map((word) => ({
+      id: word.id,
+      distance: traitDistance(secretId, word.id),
+      pop: word.pop,
+      name: word.name,
+    }))
+    .sort((a, b) => a.distance - b.distance || b.pop - a.pop || a.name.localeCompare(b.name));
+  const school = ranked[0] ?? { id: secretId, distance: 0 };
+  const farther = ranked.filter((word) => word.distance >= 0.45 && word.id !== school.id);
+  const fisheries = farther[0] ?? ranked.find((word) => word.id !== school.id) ?? school;
+  return { schoolId: school.id, fisheriesId: fisheries.id };
+}
+
+export function promptLands(raw: string): boolean {
+  const parsed = parsePrompt(raw);
+  return Boolean(parsed.normalized) && (parsed.assertions.length > 0 || parsed.mentions.length > 0);
+}
+
+/** Secret, the team's blur, or a near twin. Same rejection either way, so a block is not a confirmation. */
+export function blockedName(raw: string, secretId: string, standInId: string | null): boolean {
+  for (const mention of parsePrompt(raw).mentions) {
+    if (mention.id === secretId || mention.id === standInId) return true;
+    if (traitDistance(mention.id, secretId) < 0.2) return true;
+  }
+  return false;
+}
+
+export function catchPoints(guessId: string | null, secretId: string): number {
+  if (!guessId) return 0;
+  if (guessId === secretId) return 120;
+  const distance = traitDistance(guessId, secretId);
+  if (distance < 0.25) return 80;
+  if (distance < 0.5) return 40;
+  return 0;
+}
+
+export function roundScore(
+  guessId: string | null,
+  secretId: string,
+  scores: Map<string, number>,
+): { fisheries: number; school: number; rank: number; distance: number } {
+  const fisheries = catchPoints(guessId, secretId);
+  const rank = rankOf(scores, secretId);
+  const leader = leadingGuess(scores);
+  const school =
+    guessId === secretId ? 0 : pointsFor(rank, traitDistance(secretId, leader.id), leader.id, secretId);
+  const distance = guessId ? traitDistance(guessId, secretId) : 1;
+  return { fisheries, school, rank, distance };
+}
+
+function directionOf(raw: string): Record<Feature, number> | null {
+  const parsed = parsePrompt(raw);
+  if (parsed.assertions.length === 0 && parsed.mentions.length === 0) return null;
+  const vec = {} as Record<Feature, number>;
+  for (const feature of FEATURES) vec[feature] = 0;
+  let mass = 0;
+  for (const assertion of parsed.assertions) {
+    vec[assertion.feature] += assertion.sign * assertion.weight;
+    mass += assertion.weight;
+  }
+  return mass > 0 ? vec : null;
+}
+
+function cosineDir(a: Record<Feature, number>, b: Record<Feature, number>): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (const feature of FEATURES) {
+    dot += a[feature] * b[feature];
+    na += a[feature] * a[feature];
+    nb += b[feature] * b[feature];
+  }
+  if (na === 0 || nb === 0) return 1;
+  return dot / Math.sqrt(na * nb);
+}
+
+/** 0.18 packed, ~0.9 scattered. One cast, or none, stays a modest school. */
+export function schoolSpread(texts: string[]): number {
+  const dirs = texts.map(directionOf).filter((dir): dir is Record<Feature, number> => dir != null);
+  if (dirs.length < 2) return 0.28;
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < dirs.length; i += 1) {
+    for (let j = i + 1; j < dirs.length; j += 1) {
+      const agree = cosineDir(dirs[i]!, dirs[j]!);
+      sum += (1 - agree) / 2;
+      n += 1;
+    }
+  }
+  const disagree = n === 0 ? 0 : sum / n;
+  return Math.min(0.92, Math.max(0.18, 0.18 + disagree * 0.74));
+}
+
+export type DrillPair = {
+  left: string;
+  right: string;
+  leftSide: "fisheries" | "school";
+  rightSide: "fisheries" | "school";
+};
+
+/** Five unlabeled pairs. Sides stay on the object so the reveal can teach, not the buttons. */
+export function drillPairs(secretId: string): DrillPair[] {
+  const word = WORD_BY_ID.get(secretId);
+  if (!word) return [];
+  const yes = [...word.yes];
+  const no = FEATURES.filter((feature) => !word.yes.has(feature));
+  const pairs: DrillPair[] = [];
+  for (let i = 0; i < 5; i += 1) {
+    const yesFeat = yes[i % Math.max(yes.length, 1)] ?? "animal";
+    const noFeat = no[i % Math.max(no.length, 1)] ?? "metal";
+    const help = i % 2 === 0 ? `it is ${yesFeat}` : `something ${yesFeat}`;
+    const harm = i % 2 === 0 ? `not ${yesFeat}` : `it is ${noFeat}`;
+    const flip = i % 2 === 1;
+    pairs.push(
+      flip
+        ? { left: harm, right: help, leftSide: "school", rightSide: "fisheries" }
+        : { left: help, right: harm, leftSide: "fisheries", rightSide: "school" },
+    );
+  }
+  return pairs;
+}
+
