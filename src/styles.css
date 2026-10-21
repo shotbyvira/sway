@@ -192,7 +192,16 @@ button.bg-fg {
   }
 
   .compass-needle,
-  .fish-drift {
+  .fish-drift,
+  .swimmer,
+  .swimmer-big,
+  .tail,
+  .bubble,
+  .water-drift,
+  .net-mesh,
+  .swimmer-glow,
+  .school-dart,
+  .school-haul {
     animation: none;
     transition: none;
   }
@@ -234,5 +243,149 @@ button.bg-fg {
 
 .fish-drift {
   transition: transform 700ms ease;
+}
+
+.fish-stage .swimmer,
+.fish-stage .tail,
+.fish-stage .school-dart,
+.fish-stage .school-haul,
+.fish-stage .water-drift,
+.fish-stage .bubble,
+.fish-stage .swimmer-glow {
+  transform-box: fill-box;
+}
+
+.swimmer {
+  transform-origin: 2px 0;
+  animation: swimmer 1.6s ease-in-out infinite;
+}
+
+.swimmer-big {
+  animation-duration: 2.2s;
+}
+
+.tail {
+  transform-origin: -10px 0;
+  animation: wag 0.42s ease-in-out infinite;
+}
+
+.swimmer-glow {
+  transform-origin: 2px 0;
+  animation: glow-pulse 2.2s ease-in-out infinite;
+}
+
+.net-mesh {
+  fill: rgba(77, 227, 255, 0.08);
+  stroke: #4de3ff;
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  animation: net-drift 1.4s linear infinite;
+}
+
+.net-mesh-inner {
+  fill: none;
+  opacity: 0.55;
+  animation-duration: 1.8s;
+  animation-direction: reverse;
+}
+
+.bubble {
+  animation: bubble-up 4s linear infinite;
+}
+
+.water-drift {
+  animation: water-shift 8s ease-in-out infinite;
+}
+
+.school-dart {
+  animation: school-dart 0.55s ease-out;
+}
+
+.school-haul {
+  animation: school-haul 0.55s ease-out;
+}
+
+@keyframes swimmer {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  50% {
+    transform: translate(8px, -5px) rotate(10deg);
+  }
+}
+
+@keyframes wag {
+  0%,
+  100% {
+    transform: rotate(-22deg);
+  }
+  50% {
+    transform: rotate(24deg);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.22;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes net-drift {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
+@keyframes bubble-up {
+  0% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translateY(-120px);
+    opacity: 0;
+  }
+}
+
+@keyframes water-shift {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-10px);
+  }
+}
+
+@keyframes school-dart {
+  0% {
+    transform: translate(0, 0);
+  }
+  35% {
+    transform: translate(16px, -6px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes school-haul {
+  0% {
+    transform: translate(0, 0);
+  }
+  35% {
+    transform: translate(-14px, 3px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
 }
 
