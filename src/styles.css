@@ -452,13 +452,19 @@
   flex: none;
 }
 
+main p,
+main h1,
+main li {
+  text-shadow: 0 1px 0 rgba(6, 28, 48, 0.65);
+}
+
 .sea-viewport {
   position: fixed;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background: #050a14;
+  background: #123a5c;
 }
 
 .sea-svg {
@@ -467,8 +473,31 @@
   height: 100%;
 }
 
-.trailer-float {
-  animation: trailer-float 3.6s ease-in-out infinite;
+.trailer-bob {
+  animation: trailer-bob 3.4s ease-in-out infinite;
+}
+
+@keyframes trailer-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.surface-ripple {
+  animation: surface-ripple 5.5s linear infinite;
+}
+
+@keyframes surface-ripple {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-72px);
+  }
 }
 
 .web-line {
@@ -487,16 +516,6 @@
 
 .sea-wave-slow {
   animation-duration: 12s;
-}
-
-@keyframes trailer-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
 }
 
 @keyframes web-flow {
@@ -577,7 +596,8 @@ button.bg-fg {
   .school-haul,
   .puffer,
   .stage-shake,
-  .trailer-float,
+  .trailer-bob,
+  .surface-ripple,
   .web-line,
   .sea-wave {
     animation: none;

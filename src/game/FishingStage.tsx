@@ -85,14 +85,20 @@ function SeaWorld({ view }: { view: SeaView }) {
     <div className={"sea-viewport " + (view.pull === "bolt" ? "stage-shake" : "")} aria-hidden="true">
       <svg viewBox="0 0 1600 900" className="sea-svg" preserveAspectRatio="xMidYMid slice">
         <g transform={`translate(800 ${360 + posed.y}) scale(${posed.s}) translate(-800 -360)`}>
-          <rect x="-200" y="-200" width="2000" height="520" fill="#050a14" />
-          <rect x="-200" y="300" width="2000" height="140" fill="#0b1c33" />
-          <path d="M-200 390 C 180 348, 460 430, 800 372 C 1120 318, 1360 410, 1800 360 L 1800 1500 L -200 1500 Z" fill="#08283c" />
-          <path d="M-200 470 C 200 430, 520 510, 860 456 C 1180 408, 1420 500, 1800 448 L 1800 1500 L -200 1500 Z" fill="#061e30" />
-          <path d="M-200 760 C 240 720, 620 800, 980 740 C 1280 690, 1500 780, 1800 730 L 1800 1500 L -200 1500 Z" fill="#050f1c" />
-          <path className="sea-wave" d="M-200 360 C 160 332, 420 392, 760 352 C 1100 312, 1340 384, 1800 340" fill="none" stroke="#4de3ff" strokeWidth="2" opacity="0.55" />
-          <path className="sea-wave sea-wave-slow" d="M-200 392 C 220 420, 560 360, 900 404 C 1220 444, 1460 380, 1800 412" fill="none" stroke="#7d93b8" strokeWidth="1.5" opacity="0.35" />
-          <g className="trailer-float">
+          <rect x="-200" y="-400" width="2000" height="520" fill="#123a5c" />
+          <rect x="-200" y="80" width="2000" height="180" fill="#1d6fa3" />
+          <rect x="-200" y="220" width="2000" height="160" fill="#7ec8e8" />
+          <ellipse cx="800" cy="300" rx="420" ry="48" fill="#fff4cc" opacity="0.45" />
+          <path d="M-200 360 C 180 332, 460 392, 800 348 C 1120 308, 1360 388, 1800 344 L 1800 1500 L -200 1500 Z" fill="#1a9fd0" />
+          <path d="M-200 430 C 200 400, 520 470, 860 424 C 1180 384, 1420 460, 1800 418 L 1800 1500 L -200 1500 Z" fill="#127eae" />
+          <path d="M-200 640 C 240 600, 620 690, 980 630 C 1280 580, 1500 700, 1800 640 L 1800 1500 L -200 1500 Z" fill="#0c5e86" />
+          <g className="surface-ripple">
+            <path d={ripple(348, 3.2, 28)} fill="none" stroke="#f4fbff" strokeWidth="2.4" opacity="0.9" />
+            <path d={ripple(356, 2.2, 18)} fill="none" stroke="#b7e7f8" strokeWidth="1.6" opacity="0.8" />
+            <path d={ripple(366, 4, 36)} fill="none" stroke="#e9f8ff" strokeWidth="1.2" opacity="0.55" />
+          </g>
+          <path className="sea-wave" d="M-200 400 C 160 378, 420 428, 760 392 C 1100 358, 1340 430, 1800 388" fill="none" stroke="#d7f3ff" strokeWidth="1.5" opacity="0.45" />
+          <g>
             <Trailer />
           </g>
           {BUBBLES.map((bubble) => (
@@ -151,8 +157,8 @@ const BUBBLES = Array.from({ length: 14 }, (_, i) => ({
 
 function usePose(view: SeaView) {
   const target = {
-    y: view.depth === "dive" ? -300 : 0,
-    s: view.depth === "dive" ? 1.08 : 0.72,
+    y: view.depth === "dive" ? -300 : 170,
+    s: view.depth === "dive" ? 1.08 : 0.92,
     net: view.net,
     spread: view.spread,
     schoolShift: view.pull === "bolt" ? 78 : view.pull === "miss" ? 20 : 0,
@@ -200,20 +206,37 @@ function clamp(n: number) {
   return Math.max(0, Math.min(1, n));
 }
 
+function ripple(y: number, amp: number, length: number) {
+  let d = "";
+  for (let x = -240; x <= 1860; x += 12) {
+    const yy = y + Math.sin(x / length) * amp;
+    d += `${x === -240 ? "M" : "L"}${x} ${yy.toFixed(1)} `;
+  }
+  return d;
+}
+
 function Trailer() {
   return (
-    <g transform="translate(800 360)" shapeRendering="crispEdges">
-      <rect x={-92} y={-6} width={184} height={14} fill="#123048" />
-      <rect x={-70} y={4} width={140} height={6} fill="#0b1c33" />
-      <rect x={-78} y={-10} width={22} height={8} fill="#1b3050" />
-      <rect x={56} y={-10} width={22} height={8} fill="#1b3050" />
-      <rect x={-34} y={-58} width={68} height={52} fill="#101d33" stroke="#4de3ff" strokeWidth={2} />
-      <rect x={-22} y={-44} width={16} height={12} fill="#4de3ff" />
-      <rect x={2} y={-44} width={16} height={12} fill="#ff5d8f" />
-      <rect x={-4} y={-86} width={4} height={28} fill="#7d93b8" />
-      <text y={32} textAnchor="middle" fill="#7d93b8" fontSize="16" fontFamily="VT323, monospace">
-        trailer
-      </text>
+    <g transform="translate(800 348)">
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-340 0;340 0;-340 0" dur="18s" repeatCount="indefinite" />
+        <g className="trailer-bob">
+        <g transform="scale(1.65)" shapeRendering="crispEdges">
+        <ellipse cx="0" cy="10" rx="78" ry="8" fill="#083044" opacity="0.28" />
+        <rect x={-92} y={-6} width={184} height={14} fill="#0e3a56" />
+        <rect x={-70} y={4} width={140} height={6} fill="#08283c" />
+        <rect x={-78} y={-10} width={22} height={8} fill="#14506e" />
+        <rect x={56} y={-10} width={22} height={8} fill="#14506e" />
+        <rect x={-34} y={-58} width={68} height={52} fill="#14324a" stroke="#e8f7ff" strokeWidth={2} />
+        <rect x={-22} y={-44} width={16} height={12} fill="#4de3ff" />
+        <rect x={2} y={-44} width={16} height={12} fill="#ff5d8f" />
+        <rect x={-4} y={-86} width={4} height={28} fill="#e8f1ff" />
+        <text y={32} textAnchor="middle" fill="#f4fbff" fontSize="16" fontFamily="VT323, monospace">
+          trailer
+        </text>
+        </g>
+      </g>
+      </g>
     </g>
   );
 }
