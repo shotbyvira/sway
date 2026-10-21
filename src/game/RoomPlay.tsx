@@ -321,14 +321,14 @@ export function RoomPlay({
   if (!room) {
     return (
       <section className="rise flex flex-1 flex-col">
-        <h1 className="font-display text-4xl leading-none">{intent === "join" ? "Join a boat" : "Open a boat"}</h1>
+        <h1 className="px-head">{intent === "join" ? "Join a boat" : "Open a boat"}</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           {intent === "join"
             ? "Same code, your own phone. Your side casts together."
             : "You'll get a four-letter code. Both crews join from their own phones."}
         </p>
         <label className="mt-6 block">
-          <span className="text-xs tracking-widest text-muted uppercase">Your name</span>
+          <span className="px-kicker">Your name</span>
           <input
             value={handle}
             maxLength={16}
@@ -338,7 +338,7 @@ export function RoomPlay({
             className="mt-1 w-full min-h-12 px-3 text-fg outline-none"
           />
         </label>
-        <p className="mt-4 text-xs tracking-widest text-muted uppercase">Start on</p>
+        <p className="px-kicker mt-4">Start on</p>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {(["amber", "tide"] as const).map((side) => (
             <button
@@ -355,7 +355,7 @@ export function RoomPlay({
         </div>
         {intent === "join" && (
           <label className="mt-4 block">
-            <span className="text-xs tracking-widest text-muted uppercase">Room code</span>
+            <span className="px-kicker">Room code</span>
             <input
               value={codeText}
               maxLength={4}
@@ -364,7 +364,7 @@ export function RoomPlay({
               spellCheck={false}
               onChange={(e) => setCodeText(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4))}
               placeholder="K7MQ"
-              className="mt-1 w-full min-h-14 text-center font-display text-3xl tracking-[0.28em] text-fg uppercase outline-none"
+              className="px-code mt-1 w-full min-h-14 bg-transparent text-center font-display text-3xl uppercase outline-none"
             />
           </label>
         )}
@@ -394,7 +394,7 @@ export function RoomPlay({
     <section className="flex flex-1 flex-col">
       {room.status === "lobby" && (
         <div className="rise flex flex-1 flex-col">
-          <p className="text-xs tracking-widest text-muted uppercase">Room</p>
+          <p className="px-kicker">Room</p>
           <div className="mt-1 flex items-center justify-between gap-3">
             <p className="px-code font-display text-6xl">{room.code}</p>
             <button type="button" onClick={() => void copyCode()} className="px-chip inline-flex min-h-11 items-center gap-2 px-3 text-sm">
@@ -449,7 +449,7 @@ export function RoomPlay({
               Switch to {sideLabel(otherSide(room.you.team), room)}
             </button>
           )}
-          <p className="mt-4 text-xs tracking-widest text-muted uppercase">Rounds each</p>
+          <p className="px-kicker mt-4">Rounds each</p>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {[1, 2, 3].map((n) => (
               <button
@@ -458,8 +458,7 @@ export function RoomPlay({
                 disabled={pending}
                 onClick={() => pushNames({ cycles: n })}
                 className={
-                  "min-h-12 border text-sm " +
-                  (room.cycles === n ? "border-fg bg-fg text-bg" : "border-line bg-surface text-fg")
+                  "px-key min-h-12 text-sm " + (room.cycles === n ? "on-tide" : "")
                 }
               >
                 {n === 1 ? "One each" : `${n} each`}
@@ -489,7 +488,7 @@ export function RoomPlay({
           >
             ▼ Toss for the net ▼
           </button>
-          <button type="button" onClick={exitRoom} className="mt-3 min-h-11 text-sm text-muted">
+          <button type="button" onClick={exitRoom} className="px-quiet mt-3">
             Leave room
           </button>
         </div>
@@ -498,7 +497,7 @@ export function RoomPlay({
       {room.status !== "lobby" && (
         <div className="rise flex flex-1 flex-col">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xs tracking-widest text-muted uppercase">
+            <p className="px-kicker">
               {room.code} · {room.round} of {room.rounds}
             </p>
             <p className="text-sm tabular-nums text-muted">
@@ -531,7 +530,7 @@ export function RoomPlay({
           {room.deadline != null && room.status !== "reveal" && room.status !== "cast" && (
             <div className="mt-3">
               <div className="flex items-baseline justify-between text-sm">
-                <span className="tracking-widest text-muted uppercase">
+                <span className="px-kicker">
                   {room.status === "clue" ? "Casts" : room.status === "deal" ? "Deal" : "Name it"}
                 </span>
                 <span className={"tabular-nums " + (leftMs <= 5000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</span>
@@ -604,7 +603,7 @@ export function RoomPlay({
           )}
 
           {error && <p className="mt-3 text-sm text-warn">{error}</p>}
-          <button type="button" onClick={exitRoom} className="mt-4 min-h-11 text-sm text-muted">
+          <button type="button" onClick={exitRoom} className="px-quiet mt-4">
             Leave room
           </button>
         </div>
@@ -799,7 +798,7 @@ function NamePanel({
           </button>
         ))}
       </div>
-      <label className="mt-3 flex items-center gap-2 border border-line bg-surface px-3">
+      <label className="px-field mt-3">
         <Search className="size-4 text-muted" aria-hidden="true" />
         <input
           value={query}
@@ -811,7 +810,7 @@ function NamePanel({
       </label>
       <div className="mt-2 grid gap-1">
         {found.map((word) => (
-          <button key={word.id} type="button" disabled={pending} onClick={() => onPick(word.id)} className="min-h-11 text-left text-fg disabled:opacity-40">
+          <button key={word.id} type="button" disabled={pending} onClick={() => onPick(word.id)} className="px-row disabled:opacity-40">
             {word.name}
           </button>
         ))}
@@ -837,7 +836,7 @@ function RevealPanel({
   const caught = result.guessName === result.secretName;
   return (
     <div className="mt-4">
-      <p className="font-display text-4xl leading-none">{caught ? "Caught" : "It slipped"}</p>
+      <p className="px-head">{caught ? "Caught" : "It slipped"}</p>
       <p className="mt-2 text-lg text-fg">The fish was {result.secretName}.</p>
       <p className="mt-1 text-sm text-muted">
         {result.guessName === "—" ? "No name in time." : `The skipper said ${result.guessName}.`} It finished #{result.rank}.
@@ -864,7 +863,7 @@ function MatchPanel({ room, pending, onRematch }: { room: RoomView; pending: boo
   const winner = amber === tide ? "Split catch." : amber > tide ? `${room.amberName} takes it.` : `${room.tideName} takes it.`;
   return (
     <div className="mt-4">
-      <p className="font-display text-4xl leading-none">{winner}</p>
+      <p className="px-head">{winner}</p>
       <div className="mt-4 grid grid-cols-2 gap-2">
         <ScoreTile name={room.amberName} role="Total" points={amber} tone="amber" />
         <ScoreTile name={room.tideName} role="Total" points={tide} tone="tide" />
@@ -915,7 +914,7 @@ function TeamColumn({
   onBlur: () => void;
 }) {
   return (
-    <div className={"px-panel border-t-4 p-2 " + (tone === "amber" ? "border-t-amber" : "border-t-tide")}>
+    <div className={"px-panel p-2 " + (tone === "amber" ? "tone-amber" : "tone-tide")}>
       <input
         value={name}
         maxLength={16}
@@ -943,10 +942,10 @@ function TeamColumn({
 
 function ScoreTile({ name, role, points, tone }: { name: string; role: string; points: number; tone: Side }) {
   return (
-    <div className={"border p-3 " + (tone === "amber" ? "border-amber" : "border-tide")}>
-      <p className="text-xs tracking-widest text-muted uppercase">{role}</p>
+    <div className={"px-panel p-3 " + (tone === "amber" ? "tone-amber" : "tone-tide")}>
+      <p className="px-kicker">{role}</p>
       <p className="mt-1 truncate text-fg">{name}</p>
-      <p className="font-display text-4xl leading-none">{points}</p>
+      <p className="px-head">{points}</p>
     </div>
   );
 }

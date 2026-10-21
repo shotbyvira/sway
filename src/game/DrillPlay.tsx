@@ -123,9 +123,9 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
 
   return (
     <section className="rise flex flex-1 flex-col">
-      <p className="text-xs tracking-widest text-muted uppercase">Skipper drill</p>
+      <p className="px-kicker">Skipper drill</p>
       <div className="mt-1 flex items-baseline justify-between gap-3">
-        <h1 className="font-display text-4xl leading-none">
+        <h1 className="px-head">
           {phase === "reveal" ? "The water stills" : phase === "name" ? "Name it" : `Deal ${index + 1} of ${pairs.length}`}
         </h1>
         {phase !== "reveal" && (
@@ -163,7 +163,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
               </button>
             ))}
           </div>
-          <label className="mt-3 flex items-center gap-2 border border-line bg-surface px-3">
+          <label className="px-field mt-3">
             <Search className="size-4 text-muted" aria-hidden="true" />
             <input
               value={query}
@@ -175,7 +175,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
           </label>
           <div className="mt-2 grid gap-2">
             {found.map((word) => (
-              <button key={word.id} type="button" onClick={() => lockGuess(word.id)} className="min-h-11 text-left text-fg">
+              <button key={word.id} type="button" onClick={() => lockGuess(word.id)} className="px-row">
                 {word.name}
               </button>
             ))}

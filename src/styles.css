@@ -99,7 +99,7 @@
 
   input:focus {
     border-color: var(--color-tide);
-    box-shadow: 0 0 16px rgba(77, 227, 255, 0.22);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--color-tide) 28%, transparent);
   }
 
   input::placeholder {
@@ -117,7 +117,7 @@
     0 0 0 3px var(--color-bg),
     0 0 0 5px var(--color-tide),
     0 5px 0 5px var(--color-drop),
-    0 0 22px rgba(77, 227, 255, 0.32);
+    0 0 22px color-mix(in srgb, var(--color-tide) 32%, transparent);
 }
 
 .px-btn:hover:not(:disabled) {
@@ -126,14 +126,16 @@
     0 0 0 3px var(--color-bg),
     0 0 0 5px var(--color-amber),
     0 5px 0 5px var(--color-heat-ink),
-    0 0 22px rgba(255, 93, 143, 0.35);
+    0 0 22px color-mix(in srgb, var(--color-amber) 35%, transparent);
 }
 
 .px-btn:focus-visible,
 .px-chip:focus-visible,
 .px-key:focus-visible,
 .px-commit:focus-visible,
-.px-mute:focus-visible {
+.px-mute:focus-visible,
+.px-quiet:focus-visible,
+.px-row:focus-visible {
   outline: 2px solid var(--color-tide);
   outline-offset: 3px;
 }
@@ -162,7 +164,7 @@
   box-shadow:
     0 0 0 2px var(--color-bg),
     0 3px 0 2px var(--color-hold-drop),
-    0 0 16px rgba(255, 93, 143, 0.45);
+    0 0 16px color-mix(in srgb, var(--color-amber) 45%, transparent);
 }
 
 .px-commit:hover:not(:disabled) {
@@ -206,13 +208,15 @@
 }
 
 .px-mute {
-  min-height: 32px;
-  padding: 0 8px;
+  min-height: 44px;
+  padding: 0 10px;
   color: var(--color-muted);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   background: var(--color-surface);
-  box-shadow: 0 0 0 2px var(--color-well);
+  box-shadow:
+    0 0 0 2px var(--color-well),
+    0 0 0 4px var(--color-line);
   font-size: 14px;
 }
 
@@ -223,6 +227,99 @@
 .px-mute.off {
   color: var(--color-muted);
   opacity: 0.7;
+}
+
+.px-kicker {
+  display: block;
+  color: var(--color-muted);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.px-kicker.live {
+  color: var(--color-tide);
+}
+
+.px-kicker.hold {
+  color: var(--color-amber);
+}
+
+.px-head {
+  color: var(--color-fg);
+  letter-spacing: 0.04em;
+  line-height: 0.9;
+  font-size: 2.25rem;
+}
+
+.px-quiet {
+  min-height: 44px;
+  color: var(--color-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+
+.px-quiet:hover {
+  color: var(--color-tide);
+}
+
+.px-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-surface);
+  box-shadow:
+    0 0 0 2px var(--color-well),
+    0 0 0 4px var(--color-line);
+  padding: 0 12px;
+}
+
+.px-field:focus-within {
+  box-shadow:
+    0 0 0 2px var(--color-well),
+    0 0 0 4px var(--color-tide),
+    0 0 16px color-mix(in srgb, var(--color-tide) 28%, transparent);
+}
+
+.px-panel > input,
+.px-field input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.px-row {
+  min-height: 44px;
+  width: 100%;
+  text-align: left;
+  color: var(--color-fg);
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+}
+
+.px-row:hover:not(:disabled) {
+  color: var(--color-tide);
+}
+
+.px-panel {
+  background-color: var(--color-surface);
+  box-shadow:
+    0 0 0 2px var(--color-well),
+    0 0 0 4px var(--color-line);
+}
+
+.px-panel.tone-amber {
+  box-shadow:
+    0 0 0 2px var(--color-well),
+    0 0 0 4px var(--color-amber);
+}
+
+.px-panel.tone-tide {
+  box-shadow:
+    0 0 0 2px var(--color-well),
+    0 0 0 4px var(--color-tide);
 }
 
 .px-rule {
@@ -240,22 +337,14 @@
   border-top: 1px dashed var(--color-line);
 }
 
-.px-panel {
-  background-color: var(--color-surface);
-  box-shadow:
-    0 0 0 2px var(--color-bg),
-    0 0 0 4px var(--color-line),
-    4px 4px 0 var(--color-well);
-}
-
 .px-title {
   color: var(--color-fg);
   letter-spacing: 0.04em;
   line-height: 0.9;
   text-shadow:
     -3px 2px var(--color-amber),
-    3px -2px rgba(77, 227, 255, 0.85),
-    0 0 24px rgba(77, 227, 255, 0.35);
+    3px -2px color-mix(in srgb, var(--color-tide) 85%, transparent),
+    0 0 24px color-mix(in srgb, var(--color-tide) 35%, transparent);
 }
 
 .px-tag {
@@ -263,15 +352,15 @@
   letter-spacing: 0.28em;
   text-transform: uppercase;
   text-shadow:
-    0 2px rgba(5, 10, 20, 0.4),
-    0 0 12px rgba(77, 227, 255, 0.5);
+    0 2px color-mix(in srgb, var(--color-bg) 40%, transparent),
+    0 0 12px color-mix(in srgb, var(--color-tide) 50%, transparent);
 }
 
 .px-code {
   color: var(--color-tide);
   line-height: 0.9;
   letter-spacing: 0.18em;
-  text-shadow: 0 0 18px rgba(77, 227, 255, 0.55);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--color-tide) 55%, transparent);
 }
 
 .px-key {
@@ -289,7 +378,7 @@
   box-shadow:
     0 0 0 2px var(--color-well),
     0 0 0 4px var(--color-amber),
-    0 0 16px rgba(255, 93, 143, 0.35);
+    0 0 16px color-mix(in srgb, var(--color-amber) 35%, transparent);
 }
 
 .px-key.on-tide {
@@ -297,7 +386,7 @@
   box-shadow:
     0 0 0 2px var(--color-well),
     0 0 0 4px var(--color-tide),
-    0 0 16px rgba(77, 227, 255, 0.35);
+    0 0 16px color-mix(in srgb, var(--color-tide) 35%, transparent);
 }
 
 .px-say {
@@ -355,7 +444,7 @@
 .px-meter.warn {
   box-shadow:
     0 0 0 2px var(--color-well),
-    0 0 8px rgba(255, 159, 67, 0.75);
+    0 0 8px color-mix(in srgb, var(--color-warn) 75%, transparent);
 }
 
 .seat-pip {
@@ -378,7 +467,7 @@
 }
 
 .glow {
-  text-shadow: 0 0 18px rgba(77, 227, 255, 0.55);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--color-tide) 55%, transparent);
 }
 
 button.bg-amber,

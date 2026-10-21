@@ -103,7 +103,7 @@ export function SwayApp() {
             <button
               type="button"
               onClick={() => setRulesOpen((v) => !v)}
-              className="min-h-11 text-sm tracking-widest text-muted uppercase"
+              className="px-quiet"
             >
               {rulesOpen ? "Hide the water" : "How the water thinks"}
             </button>
@@ -230,7 +230,7 @@ function ScoringGuide({ total }: { total: number }) {
         Both crews can score a round. Fisheries are paid for the name. The school is paid for how deep the fish sank in
         the list of {total}, and only if the skipper missed.
       </p>
-      <p className="mt-4 text-xs tracking-widest text-tide uppercase">Fisheries, for the name</p>
+      <p className="px-kicker live mt-4">Fisheries, for the name</p>
       <ul className="mt-2">
         {[
           ["The exact fish", "120"],
@@ -244,7 +244,7 @@ function ScoringGuide({ total }: { total: number }) {
           </li>
         ))}
       </ul>
-      <p className="mt-4 text-xs tracking-widest text-amber uppercase">School, if it wasn't caught</p>
+      <p className="px-kicker hold mt-4">School, if it wasn't caught</p>
       <ul className="mt-2">
         {[
           ["Still the top answer", "0"],
