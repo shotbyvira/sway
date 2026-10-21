@@ -515,7 +515,11 @@ export function RoomPlay({
               {room.amberName} {room.tally.amber} · {room.tideName} {room.tally.tide}
             </p>
           </div>
-
+          {diving && (
+            <p className="mt-2 text-sm text-muted">
+              {pullCaption(room.pull)} {netWord(room.net)} · {spreadWord(room.spread)}
+            </p>
+          )}
           {room.status === "cast" && room.fisheries && (
             <CastPanel
               room={room}
@@ -528,12 +532,6 @@ export function RoomPlay({
           )}
 
           <div className="min-h-[34vh] flex-1" />
-          {diving && (
-            <p className="text-sm text-muted">
-              {pullCaption(room.pull)} {netWord(room.net)} · {spreadWord(room.spread)}
-            </p>
-          )}
-
           {room.deadline != null && room.status !== "reveal" && room.status !== "cast" && (
             <div className="mt-3">
               <div className="flex items-baseline justify-between text-sm">

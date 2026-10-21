@@ -9,6 +9,7 @@ import {
   randomWord,
   rankOf,
   roundScore,
+  schoolSpread,
   searchWords,
   topN,
   type PromptMemory,
@@ -31,6 +32,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   });
   const [net, setNet] = useState(0.22);
   const [pull, setPull] = useState<"idle" | "tight" | "bolt" | "miss">("idle");
+  const [schoolLines, setSchoolLines] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [leftMs, setLeftMs] = useState(DEAL_MS);
   const [picked, setPicked] = useState<string | null>(null);
@@ -83,6 +85,8 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
       play("miss");
     } else {
       const text = side === 0 ? deal.left : deal.right;
+      const who = side === 0 ? deal.leftSide : deal.rightSide;
+      if (who === "school") setSchoolLines((lines) => [...lines, text]);
       const beforeRank = rankOf(scores, secret.id);
       const beforeScore = scores.get(secret.id) ?? 0;
       const applied = applyPrompt(scores, text, memoryRef.current, secret.id);
@@ -139,11 +143,13 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   }, [phase, paused]);
   const guess = picked ? findWord(picked) : undefined;
   const scored = phase === "reveal" ? roundScore(picked, secret.id, scores) : null;
+  const spread = schoolSpread(schoolLines);
+  const caught = scored != null && scored.fisheries >= 80;
   useSea({
     depth: "dive",
-    net,
-    spread: 0.42,
-    pull,
+    net: caught ? 1 : net,
+    spread: caught ? 0.18 : spread,
+    pull: phase === "reveal" ? (caught ? "tight" : "bolt") : pull,
     secretName: phase === "reveal" ? secret.name : null,
   });
 
@@ -158,13 +164,13 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
           <p className={"tabular-nums " + (leftMs <= 5000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</p>
         )}
       </div>
+      <p className="mt-2 text-sm text-muted">
+        {pullCaption(phase === "reveal" ? (caught ? "tight" : "bolt") : pull)} {netWord(caught ? 1 : net)} · {spreadWord(caught ? 0.18 : spread)}
+      </p>
       <div className="min-h-[34vh] flex-1" />
-      <p className="text-sm text-muted">
-        {pullCaption(pull)} {netWord(net)} · {spreadWord(0.42)}
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-muted">
-        You are the skipper. You do not know the fish. Tap the line you trust. The other one splashes.
-      </p>
+      {phase !== "reveal" && (
+        <p className="text-sm leading-relaxed text-muted">Tap the line you trust. The other one splashes.</p>
+      )}
 
       {phase === "deal" && deal && (
         <div className="mt-4 grid gap-3">

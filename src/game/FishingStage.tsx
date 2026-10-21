@@ -75,10 +75,10 @@ function SeaWorld({ view }: { view: SeaView }) {
   const posed = usePose(view);
   const net = clamp(posed.net);
   const spread = clamp(posed.spread);
-  const schoolY = 900 + posed.schoolShift;
-  const webY = 700 + net * 180 + posed.webExtra;
-  const reach = 90 + spread * 560;
-  const span = 80 + net * 500;
+  const schoolY = 720 - net * 70 + posed.schoolShift;
+  const webY = 500 + net * 190 + posed.webExtra;
+  const reach = 70 + spread * 620;
+  const span = 46 + net * 340;
   const face = view.pull === "bolt" ? 1 : -1;
 
   return (
@@ -114,12 +114,24 @@ function SeaWorld({ view }: { view: SeaView }) {
             />
           ))}
           <g transform={`translate(800 ${webY})`}>
+            {[-0.62, 0, 0.62].map((side) => (
+              <line
+                key={side}
+                x1={span * side}
+                y1={348 - webY}
+                x2={span * side * 0.9}
+                y2={0}
+                stroke="#f4fbff"
+                strokeWidth="1.8"
+                opacity="0.75"
+              />
+            ))}
             <LiquidWeb span={span} />
           </g>
           <g transform={`translate(800 ${schoolY})`}>
             {KRILL.map((fish, index) => {
               const x = (fish.col / 11 - 0.5) * reach * 2 + fish.jx;
-              const y = (fish.row - 1) * 28 + fish.jy;
+              const y = (fish.row - 1) * 16 + fish.jy;
               return (
                 <Swimmer
                   key={index}
@@ -136,7 +148,7 @@ function SeaWorld({ view }: { view: SeaView }) {
             })}
             <Puffer x={0} y={0} puff={net} face={face} fast={view.pull === "tight"} />
             {view.secretName ? (
-              <text y="78" textAnchor="middle" fill="#ffd166" fontSize="22" fontFamily="VT323, monospace">
+              <text y="64" textAnchor="middle" fill="#ffd166" fontSize="22" fontFamily="VT323, monospace">
                 {view.secretName}
               </text>
             ) : null}
@@ -161,8 +173,8 @@ function usePose(view: SeaView) {
     s: view.depth === "dive" ? 1.08 : 0.92,
     net: view.net,
     spread: view.spread,
-    schoolShift: view.pull === "bolt" ? 78 : view.pull === "miss" ? 20 : 0,
-    webExtra: view.pull === "tight" ? 42 : 0,
+    schoolShift: view.pull === "bolt" ? 170 : view.pull === "miss" ? 28 : 0,
+    webExtra: view.pull === "tight" ? 78 : 0,
   };
   const [pose, setPose] = useState(target);
   const poseRef = useRef(target);
@@ -198,7 +210,7 @@ function usePose(view: SeaView) {
 }
 
 function approach(from: number, to: number) {
-  const next = from + (to - from) * 0.08;
+  const next = from + (to - from) * 0.16;
   return Math.abs(next - to) < 0.35 ? to : next;
 }
 
@@ -247,11 +259,11 @@ function LiquidWeb({ span }: { span: number }) {
   return (
     <g>
       {rows.map((y, index) => (
-        <path key={y} className="web-line" d={wave(-span, span, y, 7, index * 0.9)} fill="none" stroke="#4de3ff" strokeWidth="1.7" opacity={0.8 - index * 0.08} />
+        <path key={y} className="web-line" d={wave(-span, span, y, 7, index * 0.9)} fill="none" stroke="#f4fbff" strokeWidth="2.2" opacity={0.95 - index * 0.1} />
       ))}
       {Array.from({ length: cols }, (_, index) => {
         const x = -span + (index * (span * 2)) / (cols - 1);
-        return <path key={index} className="web-line web-line-down" d={drop(x, index)} fill="none" stroke="#4de3ff" strokeWidth="1.3" opacity="0.45" />;
+        return <path key={index} className="web-line web-line-down" d={drop(x, index)} fill="none" stroke="#d7f3ff" strokeWidth="1.6" opacity="0.7" />;
       })}
     </g>
   );
