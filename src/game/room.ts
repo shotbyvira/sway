@@ -19,6 +19,7 @@ import {
 import {
   CLUES_PER,
   CLUE_MS,
+  CAST_MS,
   DEAL_MS,
   MAX_DEALS,
   MAX_PLAYERS,
@@ -265,7 +266,8 @@ function metaFrom(value: unknown): Meta {
     lastPull: pull === "tight" || pull === "bolt" || pull === "miss" ? pull : "idle",
     pulls: Number.isFinite(Number(raw.pulls)) ? Number(raw.pulls) : 0,
     guessId: typeof raw.guessId === "string" ? raw.guessId : null,
-    holdMs: Number.isFinite(Number(raw.holdMs)) ? Math.max(0, Number(raw.holdMs)) : null,
+    // null means the clock is running. 0 is a real pause at the last moment — Number(null) is 0, so don't coerce.
+    holdMs: typeof raw.holdMs === "number" && Number.isFinite(raw.holdMs) ? Math.max(0, raw.holdMs) : null,
   };
 }
 
@@ -293,6 +295,7 @@ function fisheriesOf(half: number, meta: Meta): Side {
 }
 
 function clockFor(status: string): number | null {
+  if (status === "cast") return CAST_MS;
   if (status === "clue") return CLUE_MS;
   if (status === "deal") return DEAL_MS;
   if (status === "name") return NAME_MS;
@@ -439,7 +442,7 @@ async function openRound(
         scores = ${json(Object.fromEntries(scores))}::jsonb,
         memory = ${json(memoryTo(emptyMemory()))}::jsonb,
         used = '{}'::jsonb,
-        deadline = null,
+        deadline = ${Date.now() + CAST_MS},
         meta = ${json(meta)}::jsonb,
         version = version + 1
     where code = ${room.code} and version = ${room.version} and status = ${expect}
@@ -621,6 +624,40 @@ async function finishName(sql: Sql, room: RoomRow, guessId: string | null): Prom
   return true;
 }
 
+async function openClue(sql: Sql, room: RoomRow): Promise<boolean> {
+  const deadline = Date.now() + CLUE_MS;
+  const updated = await sql<{ version: number }>`
+    update sway_rooms
+    set status = 'clue', deadline = ${deadline}, version = version + 1
+    where code = ${room.code} and version = ${room.version} and status = 'cast'
+    returning version
+  `;
+  return updated.length > 0;
+}
+
+async function slipRound(sql: Sql, room: RoomRow): Promise<boolean> {
+  if (!room.secret_id) {
+    const updated = await sql<{ version: number }>`
+      update sway_rooms
+      set status = 'lobby', deadline = null, secret_id = null, version = version + 1
+      where code = ${room.code} and version = ${room.version} and status = ${room.status}
+      returning version
+    `;
+    return updated.length > 0;
+  }
+  const meta = { ...metaFrom(room.meta), guessId: null, holdMs: null, lastPull: "miss" as Pull };
+  const deadline = Date.now() + REVEAL_MS;
+  const updated = await sql<{ version: number }>`
+    update sway_rooms
+    set status = 'reveal', deadline = ${deadline}, meta = ${json(meta)}::jsonb, version = version + 1
+    where code = ${room.code} and version = ${room.version} and status = ${room.status}
+    returning version
+  `;
+  if (updated.length === 0) return false;
+  await writeResult(sql, room, null);
+  return true;
+}
+
 async function ensureResult(sql: Sql, room: RoomRow) {
   if (!room.secret_id) return;
   const meta = metaFrom(room.meta);
@@ -637,8 +674,18 @@ async function expireIfNeeded(sql: Sql, code: string): Promise<void> {
     }
     const meta = metaFrom(room.meta);
     const players = playersOf(await loadPlayers(sql, code), asNumMap(room.used));
+    const amber = players.filter((player) => player.team === "amber").length;
+    const tide = players.filter((player) => player.team === "tide").length;
+    if ((amber === 0 || tide === 0) && (room.status === "cast" || room.status === "clue" || room.status === "deal" || room.status === "name")) {
+      if (!(await slipRound(sql, room))) continue;
+      return;
+    }
     if (await healSkipper(sql, room, meta, players)) continue;
     const timedOut = room.deadline != null && Date.now() >= Number(room.deadline);
+    if (room.status === "cast" && timedOut) {
+      if (!(await openClue(sql, room))) continue;
+      return;
+    }
     if (room.status === "clue") {
       if (!timedOut && !clueDone(players, meta.skipperId)) return;
       if (!(await closeClue(sql, room))) continue;
@@ -733,7 +780,8 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       else if (team === school) boat.school += 1;
     }
   }
-  const timed = room.status === "clue" || room.status === "deal" || room.status === "name" || room.status === "reveal";
+  const timed =
+    room.status === "cast" || room.status === "clue" || room.status === "deal" || room.status === "name" || room.status === "reveal";
   const current = meta.deals[meta.deal];
   const deal: RoomDeal | null =
     room.status === "deal" && current
@@ -941,11 +989,11 @@ export const startRoomFn = createServerFn({ method: "POST" })
     if (!players.some((player) => player.id === data.playerId)) return { ok: false, error: "You're not in this room." };
     const problem = startError(players);
     if (problem) return { ok: false, error: problem };
+    await sql`delete from sway_prompts where room_code = ${code}`;
+    await sql`delete from sway_results where room_code = ${code}`;
     const first: Side = Math.random() < 0.5 ? "amber" : "tide";
     const opened = await openRound(sql, room, 1, 0, emptyMeta(first), "lobby");
     if (!opened) return viewOf(sql, code, data.playerId);
-    await sql`delete from sway_prompts where room_code = ${code}`;
-    await sql`delete from sway_results where room_code = ${code}`;
     return viewOf(sql, code, data.playerId);
   });
 
@@ -960,14 +1008,7 @@ export const castNetFn = createServerFn({ method: "POST" })
       if (room.status !== "cast") return viewOf(sql, code, data.playerId);
       const meta = metaFrom(room.meta);
       if (meta.skipperId !== data.playerId) return { ok: false, error: "Only the skipper casts." };
-      const deadline = Date.now() + CLUE_MS;
-      const updated = await sql<{ version: number }>`
-        update sway_rooms
-        set status = 'clue', deadline = ${deadline}, version = version + 1
-        where code = ${code} and version = ${room.version} and status = 'cast'
-        returning version
-      `;
-      if (updated.length > 0) return viewOf(sql, code, data.playerId);
+      if (await openClue(sql, room)) return viewOf(sql, code, data.playerId);
     }
     return viewOf(sql, code, data.playerId);
   });
@@ -1100,6 +1141,11 @@ export const advanceRoomFn = createServerFn({ method: "POST" })
         select id from sway_players where id = ${data.playerId} and room_code = ${code}
       `;
       if (seated.length === 0) return { ok: false, error: "You're not in this room." };
+      const meta = metaFrom(room.meta);
+      if (meta.holdMs != null) return { ok: false, error: "Resume the haul before the next cast." };
+      if (room.deadline != null && Date.now() < Number(room.deadline) - 400) {
+        return { ok: false, error: "The water is still moving." };
+      }
       if (await advanceReveal(sql, room)) return viewOf(sql, code, data.playerId);
     }
     return viewOf(sql, code, data.playerId);

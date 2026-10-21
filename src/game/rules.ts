@@ -1,4 +1,5 @@
 export const CLUES_PER = 3;
+export const CAST_MS = 20_000;
 export const CLUE_MS = 45_000;
 export const DEAL_MS = 12_000;
 export const NAME_MS = 15_000;

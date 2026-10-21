@@ -116,7 +116,7 @@ function SeaWorld({ view }: { view: SeaView }) {
   return (
     <div className="sea-viewport" aria-hidden="true">
       <svg viewBox="0 0 1600 900" className="sea-svg" preserveAspectRatio="xMidYMid slice">
-        <g transform={`translate(800 ${360 + posed.y}) scale(${posed.s}) translate(-800 -360)`}>
+        <g transform={`translate(800 ${px(360 + posed.y)}) scale(${posed.s.toFixed(3)}) translate(-800 -360)`}>
           <rect x="-200" y="-400" width="2000" height="520" fill="#123a5c" />
           <rect x="-200" y="80" width="2000" height="180" fill="#1d6fa3" />
           <rect x="-200" y="220" width="2000" height="160" fill="#7ec8e8" />
@@ -134,10 +134,10 @@ function SeaWorld({ view }: { view: SeaView }) {
           {[-1, 0, 1].map((side) => (
             <line
               key={side}
-              x1={boatX + side * 132}
-              y1={362}
-              x2={800 + side * span}
-              y2={webY}
+              x1={px(boatX + side * 132)}
+              y1="362"
+              x2={px(800 + side * span)}
+              y2={px(webY)}
               stroke="#f4fbff"
               strokeWidth="2"
               opacity="0.85"
@@ -155,10 +155,10 @@ function SeaWorld({ view }: { view: SeaView }) {
               style={{ animationDelay: `${bubble.delay}s`, animationDuration: `${bubble.dur}s` }}
             />
           ))}
-          <g transform={`translate(800 ${webY})`}>
+          <g transform={`translate(800 ${px(webY)})`}>
             <LiquidWeb span={span} />
           </g>
-          <g transform={`translate(800 ${schoolY})`}>
+          <g transform={`translate(800 ${px(schoolY)})`}>
             {KRILL.map((fish, index) => {
               const ax = Math.cos(fish.angle);
               const ay = Math.sin(fish.angle);
@@ -183,7 +183,7 @@ function SeaWorld({ view }: { view: SeaView }) {
               );
             })}
           </g>
-          <g transform={`translate(800 ${pufferY})`}>
+          <g transform={`translate(800 ${px(pufferY)})`}>
             <Puffer x={0} y={0} puff={view.finale === "haul" ? lerp(net, 1, u) : net} face={1} fast={view.finale === "haul"} />
             {view.secretName ? (
               <text y="58" textAnchor="middle" fill="#ffd166" fontSize="22" fontFamily="VT323, monospace">
@@ -273,6 +273,10 @@ function approach(from: number, to: number) {
   return Math.abs(next - to) < 0.35 ? to : next;
 }
 
+function px(n: number) {
+  return n.toFixed(2);
+}
+
 function clamp(n: number) {
   return Math.max(0, Math.min(1, n));
 }
@@ -297,9 +301,8 @@ function smooth(t: number) {
 
 function Trailer({ x }: { x: number }) {
   return (
-    <g transform={`translate(${800 + x} 348)`}>
-      <g className="trailer-bob">
-        <g transform="scale(1.65)" shapeRendering="crispEdges">
+    <g transform={`translate(${px(800 + x)} 348)`}>
+      <g transform="scale(1.65)" shapeRendering="crispEdges">
         <ellipse cx="0" cy="10" rx="78" ry="8" fill="#083044" opacity="0.28" />
         <rect x={-92} y={-6} width={184} height={14} fill="#0e3a56" />
         <rect x={-70} y={4} width={140} height={6} fill="#08283c" />
@@ -312,7 +315,6 @@ function Trailer({ x }: { x: number }) {
         <text y={32} textAnchor="middle" fill="#f4fbff" fontSize="16" fontFamily="VT323, monospace">
           trailer
         </text>
-        </g>
       </g>
     </g>
   );
@@ -376,7 +378,7 @@ function Swimmer({
   fast: boolean;
 }) {
   return (
-    <g transform={`translate(${x} ${y}) scale(${face * scale} ${scale})`}>
+    <g transform={`translate(${px(x)} ${px(y)}) scale(${px(face * scale)} ${px(scale)})`}>
       <g
         className={fast ? "swimmer swimmer-fast" : "swimmer"}
         style={{ animationDelay: `${delay}s`, animationDuration: fast ? undefined : `${duration}s` }}
@@ -420,7 +422,7 @@ function Puffer({ x, y, puff, face, fast }: { x: number; y: number; puff: number
   });
   const unit = 3;
   return (
-    <g transform={`translate(${x} ${y}) scale(${face} 1)`}>
+    <g transform={`translate(${px(x)} ${px(y)}) scale(${face} 1)`}>
       <ellipse className="swimmer-glow" cx="0" cy="0" rx={radius * unit + 8} ry={radius * unit * 0.75 + 6} fill="#ffd166" />
       <g className={fast ? "puffer puffer-fast" : "puffer"} shapeRendering="crispEdges">
         {spikes.map((cell) => (

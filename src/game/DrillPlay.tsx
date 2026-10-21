@@ -152,7 +152,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
     net,
     spread,
     pull,
-    secretName: phase === "reveal" ? secret.name : null,
+    secretName: phase === "reveal" && revealLeft <= 0 ? secret.name : null,
     finale: phase === "reveal" ? (caught ? "haul" : "slip") : null,
     finaleT: phase === "reveal" ? 1 - revealLeft / REVEAL_MS : null,
     paused,

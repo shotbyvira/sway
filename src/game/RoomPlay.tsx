@@ -228,7 +228,7 @@ export function RoomPlay({
 
   useEffect(() => {
     if (!room || room.holdMs != null) return;
-    if (!room?.deadline || (room.status !== "clue" && room.status !== "deal" && room.status !== "name" && room.status !== "reveal")) return;
+    if (!room?.deadline || (room.status !== "cast" && room.status !== "clue" && room.status !== "deal" && room.status !== "name" && room.status !== "reveal")) return;
     closedRef.current = false;
     let frame = 0;
     let last = -1;
@@ -321,15 +321,24 @@ export function RoomPlay({
 
   const found = useMemo(() => (query.trim() ? searchWords(query).slice(0, 6) : []), [query]);
   const diving = room != null && room.status !== "lobby";
+  const revealHeld = room?.holdMs ?? null;
+  const revealRemain =
+    room?.status === "reveal"
+      ? revealHeld != null
+        ? revealHeld
+        : room.deadline != null
+          ? Math.max(0, room.deadline - Date.now())
+          : 0
+      : 0;
   useSea({
     depth: diving ? "dive" : "surface",
     net: room?.net ?? 0.28,
     spread: room?.spread ?? 0.62,
     pull: room?.pull ?? "idle",
-    secretName: room?.status === "reveal" ? room.secret : null,
+    secretName: room?.status === "reveal" && revealHeld == null && revealRemain <= 0 ? room.secret : null,
     finale: room?.status === "reveal" && room.result ? (room.result.guessName === room.result.secretName ? "haul" : "slip") : null,
     finaleT: null,
-    paused: room?.holdMs != null,
+    paused: revealHeld != null,
     beat: room?.pulls ?? 0,
   });
 
@@ -536,11 +545,11 @@ export function RoomPlay({
           )}
 
           <div className="min-h-[34vh] flex-1" />
-          {room.deadline != null && room.status !== "reveal" && room.status !== "cast" && (
+          {room.deadline != null && room.status !== "reveal" && (
             <div className="mt-3">
               <div className="flex items-baseline justify-between text-sm">
                 <span className="px-kicker">
-                  {room.status === "clue" ? "Casts" : room.status === "deal" ? "Deal" : "Name it"}
+                  {room.status === "cast" ? "Cast" : room.status === "clue" ? "Casts" : room.status === "deal" ? "Deal" : "Name it"}
                 </span>
                 <span className={"tabular-nums " + (leftMs <= 5000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</span>
               </div>
@@ -656,7 +665,7 @@ function CastPanel({
           ▼ Cast the net ▼
         </button>
       ) : (
-        <p className="mt-4 text-sm text-muted">Waiting for {skipper} to cast.</p>
+        <p className="mt-4 text-sm text-muted">Waiting for {skipper} to cast. The water casts for them if they wait.</p>
       )}
       {room.youAre && room.youAre !== "skipper" && room.standIn && (
         <p className="px-panel mt-4 p-3 text-sm leading-relaxed text-muted">
@@ -769,9 +778,8 @@ function DealPanel({
               {card.text}
             </button>
           ) : (
-            <div key={card.id} className="px-say min-h-16 px-3 py-3 text-lg leading-snug">
-              {card.text}
-              {deal.yours === card.id && <span className="ml-2 text-sm text-tide">Yours</span>}
+            <div key={card.id} className="px-say min-h-16 px-3 py-3 text-lg leading-snug text-muted">
+              Face down
             </div>
           ),
         )}
