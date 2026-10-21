@@ -26,8 +26,9 @@ export type RankedWord = { id: string; name: string; score: number; pop: number 
 export type PromptMemory = {
   repeats: Map<string, number>;
   nameHits: Map<string, number>;
-  attacks: number;
 };
+
+export type Reading = "tight" | "bolt" | "miss";
 
 const PRIOR = 0.22;
 
@@ -40,8 +41,22 @@ for (const word of WORDS) {
 
 const BY_LENGTH = [...WORDS].sort((a, b) => b.name.length - a.name.length);
 
+function sameShape(a: Word, b: Word): boolean {
+  if (a.yes.size !== b.yes.size) return false;
+  for (const feature of a.yes) if (!b.yes.has(feature)) return false;
+  return true;
+}
+
+/**
+ * Fish the water can tell apart: three or more traits and no exact trait twin. Everything else in the
+ * bank stays guessable and castable, it just never gets hidden.
+ */
+export const SECRET_POOL: readonly Word[] = WORDS.filter(
+  (word) => word.yes.size >= 3 && !WORDS.some((other) => other.id !== word.id && sameShape(word, other)),
+);
+
 export function emptyMemory(): PromptMemory {
-  return { repeats: new Map(), nameHits: new Map(), attacks: 0 };
+  return { repeats: new Map(), nameHits: new Map() };
 }
 
 export function initialScores(): Map<string, number> {
@@ -58,60 +73,76 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function parsePrompt(raw: string): ParsedPrompt {
-  const normalized = raw
-    .toLowerCase()
+/** Phone keyboards send curly apostrophes. "isn't" has to read as "isn't". */
+const APOSTROPHES = /[\u2018\u2019\u201B\u02BC\u0060\u00B4]/g;
+/** A comma, a full stop or a "but" ends a "not". "Not hot but cold" is cold. */
+const CLAUSE_BREAK = /[,.;:!?]+|\b(?:but|though|although|yet|whereas)\b/;
+const NAME_NEGATION = /\b(not|no|never|isn't|isnt|aren't|arent|without|don't|dont)\b/;
+
+function cleanClause(text: string): string {
+  return text
     .replace(/[^a-z0-9'\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
 
+export function parsePrompt(raw: string): ParsedPrompt {
+  const clauses = raw
+    .toLowerCase()
+    .replace(APOSTROPHES, "'")
+    .split(CLAUSE_BREAK)
+    .map(cleanClause)
+    .filter(Boolean);
+  const normalized = clauses.join(" ");
   const mentions: Mention[] = [];
-  let scrubbed = ` ${normalized} `;
-  for (const word of BY_LENGTH) {
-    const name = word.name.toLowerCase();
-    const re = new RegExp(`\\b${escapeRegExp(name)}\\b`, "g");
-    if (!re.test(scrubbed)) continue;
-    const idx = scrubbed.indexOf(name);
-    const before = scrubbed.slice(Math.max(0, idx - 16), idx);
-    const negative = /\b(not|no|never|isn't|isnt|aren't|arent|without|don't|dont)\b/.test(before);
-    if (mentions.length < 3) mentions.push({ id: word.id, sign: negative ? -1 : 1 });
-    scrubbed = scrubbed.replace(re, " ");
-  }
-
-  const tokens = normalized.split(" ").filter(Boolean);
   const assertions: Assertion[] = [];
-  let flipRemain = 0;
-  let weightMul = 1;
 
-  for (const token of tokens) {
-    const bare = token.replace(/'/g, "");
-    if (NEGATION.has(token) || NEGATION.has(bare)) {
-      flipRemain = 3;
-      continue;
-    }
-    if (INTENSIFIERS.has(token)) {
-      weightMul = Math.max(weightMul, 1.35);
-      continue;
-    }
-    if (HEDGES.has(token)) {
-      weightMul = Math.min(weightMul, 0.5);
-      continue;
-    }
-    if (STOP.has(token) || STOP.has(bare)) continue;
-
-    const features = LEXICON[token] ?? LEXICON[bare];
-    if (features) {
-      const sign: 1 | -1 = flipRemain > 0 ? -1 : 1;
-      for (const feature of features) {
-        assertions.push({ feature, sign, weight: weightMul });
+  for (const clause of clauses) {
+    let scrubbed = ` ${clause} `;
+    for (const word of BY_LENGTH) {
+      const pattern = `\\b${escapeRegExp(word.name.toLowerCase())}\\b`;
+      const hit = new RegExp(pattern).exec(scrubbed);
+      if (!hit) continue;
+      const before = scrubbed.slice(Math.max(0, hit.index - 16), hit.index);
+      const negative = NAME_NEGATION.test(before);
+      if (mentions.length < 3 && !mentions.some((mention) => mention.id === word.id)) {
+        mentions.push({ id: word.id, sign: negative ? -1 : 1 });
       }
+      scrubbed = scrubbed.replace(new RegExp(pattern, "g"), " ");
+    }
+
+    let flipRemain = 0;
+    let weightMul = 1;
+    for (const token of clause.split(" ").filter(Boolean)) {
+      const bare = token.replace(/'/g, "");
+      if (NEGATION.has(token) || NEGATION.has(bare)) {
+        flipRemain = 3;
+        continue;
+      }
+      if (INTENSIFIERS.has(token)) {
+        weightMul = Math.max(weightMul, 1.35);
+        continue;
+      }
+      if (HEDGES.has(token)) {
+        weightMul = Math.min(weightMul, 0.5);
+        continue;
+      }
+      if (STOP.has(token) || STOP.has(bare)) continue;
+
+      const features = LEXICON[token] ?? LEXICON[bare];
+      if (features) {
+        const sign: 1 | -1 = flipRemain > 0 ? -1 : 1;
+        for (const feature of features) {
+          assertions.push({ feature, sign, weight: weightMul });
+        }
+        if (flipRemain > 0) flipRemain -= 1;
+        weightMul = 1;
+        continue;
+      }
+
       if (flipRemain > 0) flipRemain -= 1;
       weightMul = 1;
-      continue;
     }
-
-    if (flipRemain > 0) flipRemain -= 1;
-    weightMul = 1;
   }
 
   // A named object also leaks its own traits, softer than saying them outright.
@@ -130,76 +161,23 @@ export function parsePrompt(raw: string): ParsedPrompt {
   return { assertions, mentions, normalized };
 }
 
-function traitSim(aId: string, bId: string): number {
-  if (aId === bId) return 1;
-  const a = VECTORS.get(aId);
-  const b = VECTORS.get(bId);
-  if (!a || !b) return 0;
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (const feature of FEATURES) {
-    const x = a[feature];
-    const y = b[feature];
-    dot += x * y;
-    na += x * x;
-    nb += y * y;
-  }
-  if (na === 0 || nb === 0) return 0;
-  return Math.min(1, Math.max(0, dot / Math.sqrt(na * nb)));
-}
-
-/** How hard this prompt argues against the planted word. 0 agrees, 1 is a lie. */
-function hostilityOf(parsed: ParsedPrompt, secretId: string): number {
-  const vec = VECTORS.get(secretId);
-  if (!vec) return 0;
-  let hostile = 0;
-  let mass = 0;
-  for (const assertion of parsed.assertions) {
-    mass += assertion.weight;
-    const has = vec[assertion.feature] === 1;
-    const contradicts = (assertion.sign > 0 && !has) || (assertion.sign < 0 && has);
-    if (contradicts) hostile += assertion.weight;
-  }
-  for (const mention of parsed.mentions) {
-    mass += 1.2;
-    if (mention.id === secretId) {
-      if (mention.sign < 0) hostile += 1.6;
-    } else if (mention.sign > 0) {
-      hostile += 1.1;
-    }
-  }
-  if (mass === 0) return 0;
-  return Math.min(1, hostile / mass);
-}
-
+/**
+ * The skipper's board. It only hears the lines the skipper tapped and never sees the fish,
+ * so the top of the net points wherever those lines point. A tapped lie drags it off course.
+ */
 export function applyPrompt(
   scores: Map<string, number>,
   raw: string,
   memory: PromptMemory,
-  secretId: string,
-): { scores: Map<string, number>; shrug: boolean; resisted: boolean } {
+): { scores: Map<string, number>; shrug: boolean } {
   const parsed = parsePrompt(raw);
   if (!parsed.normalized || (parsed.assertions.length === 0 && parsed.mentions.length === 0)) {
-    return { scores, shrug: true, resisted: false };
+    return { scores, shrug: true };
   }
 
   const seen = memory.repeats.get(parsed.normalized) ?? 0;
   memory.repeats.set(parsed.normalized, seen + 1);
   const repeatDamp = seen === 0 ? 1 : Math.pow(0.4, seen);
-
-  const hostility = hostilityOf(parsed, secretId);
-  // Anything that argues with the planted word is fought. Blatant lies are marked as held.
-  const opposed = hostility >= 0.22;
-  const resisted = hostility >= 0.42;
-  if (opposed && repeatDamp > 0.5) memory.attacks += 1;
-  const pressure = memory.attacks;
-
-  // Doubt starts high. A long attack on one theme is slowly believed.
-  const belief = opposed ? Math.min(0.86, 0.22 + pressure * 0.018) : 1;
-  // Early lies barely bruise the secret. The grip tires as the attack continues.
-  const bruise = opposed ? Math.min(0.72, 0.08 + pressure * 0.014) : 1;
-  const secretBefore = scores.get(secretId) ?? 0;
 
   const punches = new Map<string, number>();
   for (const mention of parsed.mentions) {
@@ -221,25 +199,37 @@ export function applyPrompt(
     const named = punches.get(word.id);
     if (named) delta += named;
     delta = Math.max(-4.2, Math.min(4.2, delta * repeatDamp));
-
-    const sim = traitSim(word.id, secretId);
-    if (word.id === secretId && delta < 0) delta *= bruise;
-    else if (opposed && sim < 0.3 && delta > 0) delta *= belief;
     next.set(word.id, (next.get(word.id) ?? 0) + delta);
   }
 
-  if (opposed) {
-    let secretNow = next.get(secretId) ?? 0;
-    const dropped = secretBefore - secretNow;
-    if (dropped > 0) {
-      // Pull the secret back up by part of the drop only — never above where it started this prompt.
-      const hold = Math.max(0.22, 0.92 - pressure * 0.013);
-      secretNow += dropped * hold;
-      next.set(secretId, secretNow);
-    }
-  }
+  return { scores: next, shrug: false };
+}
 
-  return { scores: next, shrug: false, resisted };
+/** How far a line has to lean before the water moves: two true claims and one lie still read warm. */
+const READ_LEAN = 0.3;
+
+/**
+ * The water's reading of one tapped line. This is the only place the fish is consulted during a deal.
+ * Each claim is checked against the fish: mostly true closes the net, mostly false scatters the school,
+ * and an even mix barely moves it.
+ */
+export function readLine(raw: string, fishId: string): Reading {
+  const fish = VECTORS.get(fishId);
+  const dir = directionOf(raw);
+  if (!fish || !dir) return "miss";
+  let truth = 0;
+  let mass = 0;
+  for (const feature of FEATURES) {
+    const claim = dir[feature];
+    if (claim === 0) continue;
+    truth += claim * (fish[feature] === 1 ? 1 : -1);
+    mass += Math.abs(claim);
+  }
+  if (mass === 0) return "miss";
+  const lean = truth / mass;
+  if (lean >= READ_LEAN) return "tight";
+  if (lean <= -READ_LEAN) return "bolt";
+  return "miss";
 }
 
 export function ranked(scores: Map<string, number>): RankedWord[] {
@@ -263,10 +253,6 @@ export function rankOf(scores: Map<string, number>, id: string): number {
   return index < 0 ? board.length : index + 1;
 }
 
-export function leadingGuess(scores: Map<string, number>): RankedWord {
-  return ranked(scores)[0]!;
-}
-
 /** 0 = same trait fingerprint, 1 = nothing in common. */
 export function traitDistance(aId: string, bId: string): number {
   if (aId === bId) return 0;
@@ -288,25 +274,6 @@ export function traitDistance(aId: string, bId: string): number {
   return Math.min(1, Math.max(0, 1 - similarity));
 }
 
-export function pointsFor(rank: number, distance: number, guessId: string, secretId: string): number {
-  if (guessId === secretId || rank <= 1) return 0;
-  let base = 100;
-  if (rank <= 5) base = 20;
-  else if (rank <= 20) base = 50;
-  else if (rank <= 100) base = 80;
-  else base = 100;
-  const bonus = Math.round(Math.min(1, Math.max(0, distance)) * 20);
-  return Math.min(120, base + bonus);
-}
-
-export function scoreLabel(points: number): string {
-  if (points <= 0) return "The machine held.";
-  if (points < 40) return "A nudge.";
-  if (points < 70) return "Real drift.";
-  if (points < 95) return "Buried.";
-  return "Lost in the dark.";
-}
-
 export function findWord(id: string): Word | undefined {
   return WORD_BY_ID.get(id);
 }
@@ -318,25 +285,46 @@ export function searchWords(query: string): Word[] {
 }
 
 export function randomWord(avoid?: string): Word {
-  const pool = avoid ? WORDS.filter((word) => word.id !== avoid) : WORDS;
+  const pool = avoid ? SECRET_POOL.filter((word) => word.id !== avoid) : SECRET_POOL;
   const index = Math.floor(Math.random() * pool.length);
-  return pool[index] ?? WORDS[0]!;
+  return pool[index] ?? SECRET_POOL[0] ?? WORDS[0]!;
 }
 
-/** Nearest other word for the school, and the closest word at least 0.45 away for fisheries. */
+function sharedTraits(aId: string, bId: string): number {
+  const a = WORD_BY_ID.get(aId);
+  const b = WORD_BY_ID.get(bId);
+  if (!a || !b) return 0;
+  let n = 0;
+  for (const feature of a.yes) if (b.yes.has(feature)) n += 1;
+  return n;
+}
+
+/**
+ * The school sees the nearest word that isn't an exact trait twin, so they can lie well but can't be sure.
+ * The crew sees a word 0.3 to 0.5 away that shares at least two traits: a slight hint, never a blank.
+ */
 export function standIns(secretId: string): { schoolId: string; fisheriesId: string } {
-  const ranked = WORDS.filter((word) => word.id !== secretId)
+  const others = WORDS.filter((word) => word.id !== secretId)
     .map((word) => ({
       id: word.id,
       distance: traitDistance(secretId, word.id),
+      shared: sharedTraits(secretId, word.id),
       pop: word.pop,
       name: word.name,
     }))
     .sort((a, b) => a.distance - b.distance || b.pop - a.pop || a.name.localeCompare(b.name));
-  const school = ranked[0] ?? { id: secretId, distance: 0 };
-  const farther = ranked.filter((word) => word.distance >= 0.45 && word.id !== school.id);
-  const fisheries = farther[0] ?? ranked.find((word) => word.id !== school.id) ?? school;
-  return { schoolId: school.id, fisheriesId: fisheries.id };
+  const school =
+    others.find((word) => word.distance >= 0.15) ??
+    others.find((word) => word.distance > 0) ??
+    others[0]!;
+  const rest = others.filter((word) => word.id !== school.id);
+  const crew =
+    rest.find((word) => word.distance >= 0.3 && word.distance <= 0.5 && word.shared >= 2) ??
+    rest.find((word) => word.distance >= 0.3 && word.shared >= 1) ??
+    rest.find((word) => word.distance >= 0.3) ??
+    rest[0] ??
+    school;
+  return { schoolId: school.id, fisheriesId: crew.id };
 }
 
 export function promptLands(raw: string): boolean {
@@ -362,6 +350,12 @@ export function catchPoints(guessId: string | null, secretId: string): number {
   return 0;
 }
 
+export const ROUND_POINTS = 120;
+
+/**
+ * Every round splits 120. The crew keeps what the name earns and the school keeps the rest.
+ * The fish's place on the skipper's board is reported, never paid.
+ */
 export function roundScore(
   guessId: string | null,
   secretId: string,
@@ -369,11 +363,8 @@ export function roundScore(
 ): { fisheries: number; school: number; rank: number; distance: number } {
   const fisheries = catchPoints(guessId, secretId);
   const rank = rankOf(scores, secretId);
-  const leader = leadingGuess(scores);
-  const school =
-    guessId === secretId ? 0 : pointsFor(rank, traitDistance(secretId, leader.id), leader.id, secretId);
   const distance = guessId ? traitDistance(guessId, secretId) : 1;
-  return { fisheries, school, rank, distance };
+  return { fisheries, school: ROUND_POINTS - fisheries, rank, distance };
 }
 
 function directionOf(raw: string): Record<Feature, number> | null {
@@ -446,5 +437,99 @@ export function drillPairs(secretId: string): DrillPair[] {
     );
   }
   return pairs;
+}
+
+const BANK_NAMES = new Set(WORDS.map((word) => word.name.toLowerCase()));
+
+/** How the house says a trait it wants the skipper to believe. Every candidate is checked with readLine. */
+const DECOY_ADJ: Partial<Record<Feature, string[]>> = {
+  large: ["big", "huge", "giant", "massive"],
+  small: ["tiny", "little", "mini"],
+  soft: ["fluffy", "fuzzy", "soft"],
+  metal: ["steel", "iron", "metal"],
+  flies: ["flying"],
+  cold: ["frozen", "chilly", "cold"],
+  hot: ["hot", "warm"],
+  noisy: ["loud", "noisy"],
+  dangerous: ["deadly", "scary", "dangerous"],
+  colorful: ["bright", "colorful", "vivid"],
+  sharp: ["pointy", "sharp"],
+  wooden: ["wooden"],
+  round: ["round", "circular"],
+  sweet: ["sweet"],
+  electronic: ["electric", "digital"],
+  fictional: ["magic", "mythical"],
+  pet: ["tame"],
+  alive: ["living"],
+};
+
+const DECOY_NOUN: Partial<Record<Feature, string>> = {
+  mammal: "mammal",
+  bird: "bird",
+  reptile: "reptile",
+  insect: "bug",
+  plant: "plant",
+  fruit: "fruit",
+  drink: "drink",
+  tool: "tool",
+  vehicle: "vehicle",
+  place: "place",
+  music: "instrument",
+  toy: "toy",
+  container: "box",
+  person: "person",
+  weapon: "weapon",
+  electronic: "device",
+};
+
+function article(word: string): string {
+  return /^[aeiou]/.test(word) ? "an" : "a";
+}
+
+function pickOne<T>(items: readonly T[]): T | undefined {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+/**
+ * A line the house casts for a school that came up short. It describes a word far from the fish,
+ * reads cold against it, and never names anything in the bank.
+ */
+export function decoyLine(secretId: string, avoid: ReadonlySet<string> = new Set()): string {
+  const fish = WORD_BY_ID.get(secretId);
+  if (!fish) return "something loud";
+  const far = WORDS.filter((word) => word.id !== secretId && traitDistance(word.id, secretId) >= 0.6);
+  const candidates: string[] = [];
+  for (const word of far) {
+    const lacks = [...word.yes].filter((feature) => !fish.yes.has(feature));
+    const adjs = lacks.flatMap((feature) =>
+      (DECOY_ADJ[feature] ?? []).filter((say) => !BANK_NAMES.has(say)).map((say) => ({ feature, say })),
+    );
+    const nouns = lacks.flatMap((feature) => {
+      const say = DECOY_NOUN[feature];
+      return say ? [{ feature, say }] : [];
+    });
+    for (const noun of nouns) {
+      for (const adj of adjs) {
+        if (adj.feature !== noun.feature) candidates.push(`${article(adj.say)} ${adj.say} ${noun.say}`);
+      }
+      candidates.push(`some kind of ${noun.say}`);
+    }
+    for (const a of adjs) {
+      for (const b of adjs) {
+        if (a.feature < b.feature) candidates.push(`${a.say} and ${b.say}`);
+      }
+      candidates.push(`really ${a.say}`);
+    }
+  }
+  const usable = [...new Set(candidates)].filter(
+    (line) =>
+      !avoid.has(line) &&
+      parsePrompt(line).mentions.length === 0 &&
+      promptLands(line) &&
+      readLine(line, secretId) === "bolt",
+  );
+  const fallback = FEATURES.filter((feature) => !fish.yes.has(feature)).map((feature) => `it is ${feature}`);
+  const cold = fallback.filter((line) => readLine(line, secretId) === "bolt");
+  return pickOne(usable) ?? pickOne(cold) ?? "something loud";
 }
 

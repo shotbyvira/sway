@@ -7,7 +7,7 @@ import {
   findWord,
   initialScores,
   randomWord,
-  rankOf,
+  readLine,
   roundScore,
   schoolSpread,
   searchWords,
@@ -25,11 +25,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   const pairs = useMemo(() => drillPairs(secret.id), [secret.id]);
   const [phase, setPhase] = useState<Phase>("deal");
   const [index, setIndex] = useState(0);
-  const [scores, setScores] = useState<Map<string, number>>(() => {
-    const seeded = initialScores();
-    seeded.set(secret.id, (seeded.get(secret.id) ?? 0) + 2.4);
-    return seeded;
-  });
+  const [scores, setScores] = useState<Map<string, number>>(() => initialScores());
   const [net, setNet] = useState(0.22);
   const [pull, setPull] = useState<"idle" | "tight" | "bolt" | "miss">("idle");
   const [schoolLines, setSchoolLines] = useState<string[]>([]);
@@ -88,23 +84,16 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
       const text = side === 0 ? deal.left : deal.right;
       const who = side === 0 ? deal.leftSide : deal.rightSide;
       if (who === "school") setSchoolLines((lines) => [...lines, text]);
-      const beforeRank = rankOf(scores, secret.id);
-      const beforeScore = scores.get(secret.id) ?? 0;
-      const applied = applyPrompt(scores, text, memoryRef.current, secret.id);
-      const afterRank = rankOf(applied.scores, secret.id);
-      const afterScore = applied.scores.get(secret.id) ?? 0;
+      const applied = applyPrompt(scores, text, memoryRef.current);
+      const reading = applied.shrug ? "miss" : readLine(text, secret.id);
       setScores(applied.scores);
       setNet((prev) => {
-        if (applied.shrug) return prev;
-        if (afterRank < beforeRank || afterScore > beforeScore + 0.05) return Math.min(1, prev + 0.22);
-        if (afterRank > beforeRank || afterScore < beforeScore - 0.05) return Math.max(0.12, prev - 0.18);
+        if (reading === "tight") return Math.min(1, prev + 0.22);
+        if (reading === "bolt") return Math.max(0.12, prev - 0.18);
         return prev;
       });
-      if (applied.shrug) setPull("miss");
-      else if (afterRank < beforeRank || afterScore > beforeScore + 0.05) setPull("tight");
-      else if (afterRank > beforeRank || afterScore < beforeScore - 0.05) setPull("bolt");
-      else setPull("miss");
-      play(applied.shrug ? "dead" : afterRank < beforeRank || afterScore > beforeScore + 0.05 ? "tight" : afterRank > beforeRank || afterScore < beforeScore - 0.05 ? "bolt" : "miss");
+      setPull(reading);
+      play(applied.shrug ? "dead" : reading);
     }
     setBeat((n) => n + 1);
     if (index + 1 >= pairs.length) {

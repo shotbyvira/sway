@@ -1,18 +1,23 @@
 import assert from "node:assert/strict";
-import { FEATURES, LEXICON, WORDS } from "../src/game/bank.ts";
+import { FEATURES, LEXICON, WORDS, WORD_BY_ID } from "../src/game/bank.ts";
 import {
+  ROUND_POINTS,
+  SECRET_POOL,
   applyPrompt,
   blockedName,
   catchPoints,
+  decoyLine,
   drillPairs,
   emptyMemory,
   initialScores,
-  pointsFor,
+  parsePrompt,
   promptLands,
-  rankOf,
+  randomWord,
+  readLine,
   roundScore,
   schoolSpread,
   standIns,
+  topN,
   traitDistance,
 } from "../src/game/engine.ts";
 
@@ -40,7 +45,13 @@ for (const secret of WORDS) {
   const schoolD = traitDistance(secret.id, stands.schoolId);
   const fishD = traitDistance(secret.id, stands.fisheriesId);
   check(schoolD <= fishD, `${secret.name} school blur is farther than fisheries`);
-  check(fishD >= 0.45 || schoolD >= 0.45, `${secret.name} fisheries blur is too close (${fishD.toFixed(2)})`);
+  if (SECRET_POOL.includes(secret)) {
+    check(schoolD > 0, `${secret.name} school blur is an exact trait twin`);
+    check(fishD >= 0.3, `${secret.name} fisheries blur is too close (${fishD.toFixed(2)})`);
+    const crewBlur = WORD_BY_ID.get(stands.fisheriesId)!;
+    const overlap = [...crewBlur.yes].some((feature) => secret.yes.has(feature));
+    check(overlap, `${secret.name} fisheries blur shares nothing`);
+  }
   check(blockedName(secret.name, secret.id, stands.schoolId), `${secret.name} secret name not blocked`);
   check(blockedName(`not ${secret.name}`, secret.id, stands.schoolId), `${secret.name} negated name not blocked`);
   const school = WORDS.find((word) => word.id === stands.schoolId)!;
@@ -57,7 +68,7 @@ for (const secret of WORDS) {
 const scores = initialScores();
 const memory = emptyMemory();
 const secret = WORDS[0]!;
-const shrugged = applyPrompt(scores, "zzzz-not-a-trait", memory, secret.id);
+const shrugged = applyPrompt(scores, "zzzz-not-a-trait", memory);
 check(shrugged.shrug, "dead water should shrug");
 check(shrugged.scores === scores, "a shrug must not copy the board");
 
@@ -72,18 +83,80 @@ for (const word of WORDS) {
   else check(points === 0, `${word.name} at ${distance.toFixed(2)} should be 0`);
 }
 
-check(pointsFor(1, 0.9, "other", secret.id) === 0, "rank 1 pays the school nothing");
-check(pointsFor(2, 0, "other", secret.id) === 20, "2nd pays 20");
-check(pointsFor(6, 0, "other", secret.id) === 50, "6th pays 50");
-check(pointsFor(21, 0, "other", secret.id) === 80, "21st pays 80");
-check(pointsFor(101, 1, "other", secret.id) === 120, "deep rank caps at 120 with the trait bonus");
-check(pointsFor(101, 0, secret.id, secret.id) === 0, "naming the fish zeros the school even from a deep rank");
-
+for (const word of WORDS) {
+  const split = roundScore(word.id, secret.id, scores);
+  check(split.fisheries + split.school === ROUND_POINTS, `${word.name} round does not split ${ROUND_POINTS}`);
+}
 const exact = roundScore(secret.id, secret.id, scores);
 check(exact.fisheries === 120 && exact.school === 0, "exact round zeros the school");
 const miss = roundScore(null, secret.id, scores);
-check(miss.fisheries === 0, "timeout pays fisheries nothing");
-check(miss.school === 0 || miss.rank > 1, "a timeout can pay the school only if the fish is not still first");
+check(miss.fisheries === 0 && miss.school === ROUND_POINTS, "silence hands the school the round");
+
+for (const fish of SECRET_POOL) {
+  check(fish.yes.size >= 3, `${fish.name} is in the pool with ${fish.yes.size} traits`);
+  const twin = WORDS.some((other) => other.id !== fish.id && traitDistance(other.id, fish.id) === 0);
+  check(!twin, `${fish.name} has a twin`);
+}
+for (let i = 0; i < 200; i += 1) check(SECRET_POOL.includes(randomWord()), "randomWord drew outside the pool");
+
+const plain = (feature: string) => LEXICON[feature]?.length === 1;
+for (const fish of SECRET_POOL) {
+  const has = [...fish.yes].find(plain);
+  const lacks = FEATURES.find((feature) => !fish.yes.has(feature) && plain(feature));
+  if (!has || !lacks) continue;
+  check(readLine(`it is ${has}`, fish.id) === "tight", `${fish.name}: a true line should close the net`);
+  check(readLine(`it is ${lacks}`, fish.id) === "bolt", `${fish.name}: a lie should scatter the school`);
+  check(readLine(`not ${lacks}`, fish.id) === "tight", `${fish.name}: a true "not" should close the net`);
+  check(readLine(`${has} and ${lacks}`, fish.id) === "miss", `${fish.name}: half and half should barely move`);
+  const decoy = decoyLine(fish.id);
+  check(readLine(decoy, fish.id) === "bolt", `${fish.name}: decoy "${decoy}" should read cold`);
+  check(parsePrompt(decoy).mentions.length === 0, `${fish.name}: decoy "${decoy}" names a word`);
+  check(!blockedName(decoy, fish.id, null), `${fish.name}: decoy "${decoy}" is blocked`);
+}
+
+const curly = parsePrompt("it isn\u2019t big").assertions.find((a) => a.feature === "large");
+check(curly?.sign === -1, "a curly apostrophe must still negate");
+const contrast = parsePrompt("not hot but cold").assertions;
+check(contrast.find((a) => a.feature === "hot")?.sign === -1, '"not hot" should stay negative');
+check(contrast.find((a) => a.feature === "cold")?.sign === 1, '"but cold" should be positive');
+const named = parsePrompt("not big, it's a cat").mentions.find((m) => m.id === "cat");
+check(named?.sign === 1, "a name after a comma should not inherit the negation");
+
+{
+  let state = 7;
+  const realRandom = Math.random;
+  Math.random = () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+  const pick = <T,>(items: readonly T[]) => items[Math.floor(Math.random() * items.length)]!;
+  const crewLine = (fishId: string) => `it is ${pick([...WORD_BY_ID.get(standIns(fishId).fisheriesId)!.yes])}`;
+  const schoolLine = (fishId: string) => `not ${pick([...WORD_BY_ID.get(standIns(fishId).schoolId)!.yes])}`;
+  const play = (trust: "crew" | "school" | "coin") => {
+    let top = 0;
+    let points = 0;
+    for (let round = 0; round < 300; round += 1) {
+      const fish = pick(SECRET_POOL).id;
+      let board = initialScores();
+      const mem = emptyMemory();
+      for (let deal = 0; deal < 5; deal += 1) {
+        const crew = trust === "crew" || (trust === "coin" && Math.random() < 0.5);
+        board = applyPrompt(board, crew ? crewLine(fish) : schoolLine(fish), mem).scores;
+      }
+      const chip = topN(board, 1)[0]!.id;
+      if (chip === fish) top += 1;
+      points += roundScore(chip, fish, board).fisheries;
+    }
+    return { top: top / 300, points: points / 300 };
+  };
+  const coin = play("coin");
+  const crew = play("crew");
+  const school = play("school");
+  Math.random = realRandom;
+  check(coin.top < 0.25, `the top chip is the fish ${(coin.top * 100).toFixed(0)}% of the time on coin flips`);
+  const paid = [crew, coin, school].map((side) => side.points.toFixed(0)).join(" > ");
+  check(crew.points > coin.points && coin.points > school.points, `trust should pay crew > coin > school: ${paid}`);
+}
 
 const packed = schoolSpread(["it is animal", "it is animal", "something animal"]);
 const scattered = schoolSpread(["it is animal", "it is metal", "it is music", "not animal"]);

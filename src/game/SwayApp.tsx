@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DrillPlay } from "./DrillPlay";
-import { wordCount } from "./engine";
+import { ROUND_POINTS, wordCount } from "./engine";
 import { SeaProvider } from "./FishingStage";
 import { RoomPlay } from "./RoomPlay";
 import { recalledRoom } from "./seat";
@@ -113,12 +113,12 @@ export function SwayApp() {
           </div>
           {rulesOpen && (
             <div className="px-panel rise mt-4 p-4 text-left text-base leading-relaxed text-muted">
-              <p>Every word sits on a grid of traits. A cast is a claim. Honest traits pull that shape up. A lie is doubted, and the fish hauls itself back.</p>
-              <p className="mt-3">The net widens and sinks toward the school only after a deal pulls the fish closer. A school that disagrees spreads sideways. Where they overlap is how close the catch is.</p>
+              <p>Every word sits on a grid of traits. A cast is a claim about the fish. When the skipper taps a line, the water checks each claim against the hidden fish. Mostly true closes the net. Mostly false scatters the school. Half and half barely moves it.</p>
+              <p className="mt-3">The top of the net only knows the lines the skipper tapped. It never sees the fish, so a tapped lie drags it off course. Only the water knows which lines were true.</p>
             </div>
           )}
           <HowToPlay />
-          <ScoringGuide total={wordCount()} />
+          <ScoringGuide />
         </section>
       )}
 
@@ -206,7 +206,7 @@ const PLAY_STEPS = [
   "A toss chooses which crew holds the net first. A compass chooses their skipper. They have twenty seconds to cast — if they don't, the water does. The crews swap every round, and a skipper isn't picked twice until that whole crew has held the net.",
   "The fish stays hidden. The school sees a near lookalike. Fisheries see one farther away. The skipper sees neither.",
   "Forty-five seconds. Everyone except the skipper casts up to three lines, all at once. A line the water knows goes in the boat. A word it doesn't know is dead water, and it still costs a cast. Naming the fish, your lookalike, or its twin is thrown back. You can try again.",
-  "Up to five deals, twelve seconds each. Two lines, and neither is labeled. Only the skipper can read them. The skipper taps one. That line hits the water. The other one splashes. A close fish makes the net wider and deeper. Lines that disagree spread the school sideways.",
+  "Up to five deals, twelve seconds each, one for each of the crew's first five lines. Two lines, and neither is labeled. Only the skipper can read them. The skipper taps one. That line hits the water. The other one splashes. Mostly true closes the net. Mostly false scatters the school. If the school casts too few lines, the water writes theirs.",
   "Fifteen seconds to name the fish, from the top of the net or a search. A correct name hauls the fish up in the net. Anything else slips through. That scene runs for ten seconds, and anyone can pause it. The scores come after. Play one, two, or three times each. The higher total wins.",
 ];
 
@@ -226,47 +226,39 @@ function HowToPlay() {
   );
 }
 
-function ScoringGuide({ total }: { total: number }) {
+const SPLITS: [string, number][] = [
+  ["The exact fish", 120],
+  ["A very close shape", 80],
+  ["A halfway neighbor", 40],
+  ["Anything else, or silence", 0],
+];
+
+function ScoringGuide() {
   return (
     <section className="px-panel mt-3 w-full p-4 text-left">
       <h2 className="px-rule text-2xl">Scoring</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted">
-        Both crews can score a round. Fisheries are paid for the name. The school is paid for how deep the fish sank in
-        the list of {total}, and only if the skipper missed.
+        Every round splits {ROUND_POINTS} points. Fisheries keep what the skipper's name earns. The school keeps
+        the rest.
       </p>
-      <p className="px-kicker live mt-4">Fisheries, for the name</p>
+      <div className="mt-4 grid grid-cols-[1fr_6.5rem_4.5rem] items-baseline gap-x-2">
+        <span className="px-kicker">The name</span>
+        <span className="px-kicker live text-right">Fisheries</span>
+        <span className="px-kicker hold text-right">School</span>
+      </div>
       <ul className="mt-2">
-        {[
-          ["The exact fish", "120"],
-          ["A very close shape", "80"],
-          ["A halfway neighbor", "40"],
-          ["Anything else, or silence", "0"],
-        ].map(([where, points]) => (
-          <li key={where} className="flex items-baseline justify-between gap-3 border-t border-line py-2 text-sm">
+        {SPLITS.map(([where, fish]) => (
+          <li
+            key={where}
+            className="grid grid-cols-[1fr_6.5rem_4.5rem] items-baseline gap-x-2 border-t border-line py-2 text-sm"
+          >
             <span className="text-muted">{where}</span>
-            <span className="tabular-nums text-fg">{points}</span>
+            <span className="text-right tabular-nums text-fg">{fish}</span>
+            <span className="text-right tabular-nums text-fg">{ROUND_POINTS - fish}</span>
           </li>
         ))}
       </ul>
-      <p className="px-kicker hold mt-4">School, if it wasn't caught</p>
-      <ul className="mt-2">
-        {[
-          ["Still the top answer", "0"],
-          ["Finishes 2nd–5th", "20"],
-          ["Finishes 6th–20th", "50"],
-          ["Finishes 21st–100th", "80"],
-          ["Deeper than 100th", "100"],
-        ].map(([where, points]) => (
-          <li key={where} className="flex items-baseline justify-between gap-3 border-t border-line py-2 text-sm">
-            <span className="text-muted">{where}</span>
-            <span className="tabular-nums text-fg">{points}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-3 text-sm leading-relaxed text-muted">
-        The school also gets up to 20 more when the engine's leading guess shares almost no traits with the fish. A
-        direct hit zeros the school and pays Fisheries 120. Add every round. The higher total wins.
-      </p>
+      <p className="mt-3 text-sm leading-relaxed text-muted">Add every round. The higher total wins.</p>
     </section>
   );
 }
