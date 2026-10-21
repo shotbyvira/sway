@@ -144,13 +144,16 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   const guess = picked ? findWord(picked) : undefined;
   const scored = phase === "reveal" ? roundScore(picked, secret.id, scores) : null;
   const spread = schoolSpread(schoolLines);
-  const caught = scored != null && scored.fisheries >= 80;
+  const caught = picked != null && picked === secret.id;
   useSea({
     depth: "dive",
-    net: caught ? 1 : net,
-    spread: caught ? 0.18 : spread,
-    pull: phase === "reveal" ? (caught ? "tight" : "bolt") : pull,
+    net,
+    spread,
+    pull,
     secretName: phase === "reveal" ? secret.name : null,
+    finale: phase === "reveal" ? (caught ? "haul" : "slip") : null,
+    finaleT: phase === "reveal" ? 1 - revealLeft / REVEAL_MS : null,
+    paused,
   });
 
   return (
@@ -165,7 +168,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
         )}
       </div>
       <p className="mt-2 text-sm text-muted">
-        {pullCaption(phase === "reveal" ? (caught ? "tight" : "bolt") : pull)} {netWord(caught ? 1 : net)} · {spreadWord(caught ? 0.18 : spread)}
+        {pullCaption(pull)} {netWord(net)} · {spreadWord(spread)}
       </p>
       <div className="min-h-[34vh] flex-1" />
       {phase !== "reveal" && (
@@ -216,29 +219,28 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
         </div>
       )}
 
-      {phase === "reveal" && scored && (
+      {phase === "reveal" && scored && revealLeft > 0 && (
         <div className="mt-4">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="font-display text-5xl leading-none text-fg">{scored.fisheries}</p>
+            <p className="px-head">{caught ? "Hauling it up" : "Slipping through"}</p>
             <p className={"tabular-nums " + (paused ? "text-muted" : revealLeft <= 3000 ? "text-warn" : "text-tide")}>
               {formatClock(revealLeft)}
             </p>
           </div>
-          <div className={"px-meter mt-2 " + (revealLeft <= 3000 && !paused ? "warn" : "")}>
-            <div
-              className={"h-full " + (paused ? "bg-fg" : revealLeft <= 3000 ? "bg-warn" : "bg-tide")}
-              style={{ width: `${Math.max(0, Math.min(100, (revealLeft / REVEAL_MS) * 100))}%` }}
-            />
-          </div>
-          <p className="mt-3 text-lg text-fg">
+          <button type="button" onClick={() => setPaused((value) => !value)} className="px-chip mt-3 min-h-12 px-3">
+            {paused ? "Resume" : "Pause"}
+          </button>
+        </div>
+      )}
+      {phase === "reveal" && scored && revealLeft <= 0 && (
+        <div className="mt-4">
+          <p className="font-display text-5xl leading-none text-fg">{scored.fisheries}</p>
+          <p className="mt-2 text-lg text-fg">
             {picked && picked === secret.id ? "Caught." : guess ? `You named ${guess.name}.` : "The clock took the guess."}
           </p>
           <p className="mt-2 text-sm text-muted">
             The fish was {secret.name}. It finished #{scored.rank}. Fisheries {scored.fisheries}, school {scored.school}.
           </p>
-          <button type="button" onClick={() => setPaused((value) => !value)} className="px-chip mt-3 min-h-12 px-3">
-            {paused ? "Resume" : "Pause"}
-          </button>
         </div>
       )}
 

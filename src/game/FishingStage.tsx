@@ -8,9 +8,12 @@ export type SeaView = {
   spread: number;
   pull: WaterPull;
   secretName?: string | null;
+  finale: "haul" | "slip" | null;
+  finaleT: number | null;
+  paused: boolean;
 };
 
-const SURFACE: SeaView = { depth: "surface", net: 0.28, spread: 0.62, pull: "idle", secretName: null };
+const SURFACE: SeaView = { depth: "surface", net: 0.28, spread: 0.62, pull: "idle", secretName: null, finale: null, finaleT: null, paused: false };
 
 const SeaCtx = createContext<(next: SeaView) => void>(() => {});
 
@@ -26,10 +29,10 @@ export function SeaProvider({ children }: { children: ReactNode }) {
 
 export function useSea(view: SeaView) {
   const setView = useContext(SeaCtx);
-  const { depth, net, spread, pull, secretName } = view;
+  const { depth, net, spread, pull, secretName, finale, finaleT, paused } = view;
   useEffect(() => {
-    setView({ depth, net, spread, pull, secretName: secretName ?? null });
-  }, [setView, depth, net, spread, pull, secretName]);
+    setView({ depth, net, spread, pull, secretName: secretName ?? null, finale, finaleT, paused });
+  }, [setView, depth, net, spread, pull, secretName, finale, finaleT, paused]);
   useEffect(() => {
     return () => setView(SURFACE);
   }, [setView]);
@@ -49,6 +52,9 @@ const KRILL = Array.from({ length: 36 }, (_, i) => {
     delay: -((i * 0.37) % 2.4),
     duration: i % 3 === 0 ? 2.9 : 2.6,
     scale: 1.35 + (i % 4) * 0.28,
+    angle: ((i * 47) % 36) * (Math.PI / 18),
+    speed: 1.15 + (i % 5) * 0.22,
+    phase: i * 0.65,
   };
 });
 
@@ -72,17 +78,40 @@ export function spreadWord(spread: number): string {
 }
 
 function SeaWorld({ view }: { view: SeaView }) {
-  const posed = usePose(view);
+  const posed = useMotion(view);
   const net = clamp(posed.net);
   const spread = clamp(posed.spread);
-  const schoolY = 720 - net * 70 + posed.schoolShift;
-  const webY = 500 + net * 190 + posed.webExtra;
-  const reach = 70 + spread * 620;
-  const span = 46 + net * 340;
-  const face = view.pull === "bolt" ? 1 : -1;
+  const playSchool = 720 - net * 70;
+  const playWeb = 500 + net * 190;
+  const playSpan = 46 + net * 340;
+  const playReach = 70 + spread * 620;
+  const u = smooth(posed.finaleT);
+  let schoolY = playSchool;
+  let webY = playWeb;
+  let span = playSpan;
+  let reach = playReach;
+  let pufferY = playSchool;
+  if (view.finale === "haul") {
+    const close = Math.min(1, u / 0.32);
+    const rise = smooth(Math.max(0, (u - 0.28) / 0.72));
+    webY = lerp(lerp(playWeb, playSchool - 8, close), 392, rise);
+    span = lerp(playSpan, 110, rise);
+    pufferY = lerp(playSchool, webY + 26, Math.max(close, rise));
+    reach = lerp(playReach, 780, u);
+    schoolY = playSchool + u * 36;
+  } else if (view.finale === "slip") {
+    const through = smooth(Math.min(1, u / 0.5));
+    const away = smooth(Math.max(0, (u - 0.32) / 0.68));
+    webY = lerp(lerp(playWeb, playSchool + 36, through), 1040, away);
+    span = lerp(playSpan, playSpan + 90, through);
+    schoolY = playSchool + away * 40;
+    pufferY = schoolY;
+    reach = lerp(playReach, 840, away);
+  }
+  const boatX = 800 + posed.cruise;
 
   return (
-    <div className={"sea-viewport " + (view.pull === "bolt" ? "stage-shake" : "")} aria-hidden="true">
+    <div className="sea-viewport" aria-hidden="true">
       <svg viewBox="0 0 1600 900" className="sea-svg" preserveAspectRatio="xMidYMid slice">
         <g transform={`translate(800 ${360 + posed.y}) scale(${posed.s}) translate(-800 -360)`}>
           <rect x="-200" y="-400" width="2000" height="520" fill="#123a5c" />
@@ -98,9 +127,19 @@ function SeaWorld({ view }: { view: SeaView }) {
             <path d={ripple(366, 4, 36)} fill="none" stroke="#e9f8ff" strokeWidth="1.2" opacity="0.55" />
           </g>
           <path className="sea-wave" d="M-200 400 C 160 378, 420 428, 760 392 C 1100 358, 1340 430, 1800 388" fill="none" stroke="#d7f3ff" strokeWidth="1.5" opacity="0.45" />
-          <g>
-            <Trailer />
-          </g>
+          <Trailer x={posed.cruise} />
+          {[-1, 0, 1].map((side) => (
+            <line
+              key={side}
+              x1={boatX + side * 132}
+              y1={362}
+              x2={800 + side * span}
+              y2={webY}
+              stroke="#f4fbff"
+              strokeWidth="2"
+              opacity="0.85"
+            />
+          ))}
           {BUBBLES.map((bubble) => (
             <circle
               key={bubble.x}
@@ -114,24 +153,15 @@ function SeaWorld({ view }: { view: SeaView }) {
             />
           ))}
           <g transform={`translate(800 ${webY})`}>
-            {[-0.62, 0, 0.62].map((side) => (
-              <line
-                key={side}
-                x1={span * side}
-                y1={348 - webY}
-                x2={span * side * 0.9}
-                y2={0}
-                stroke="#f4fbff"
-                strokeWidth="1.8"
-                opacity="0.75"
-              />
-            ))}
             <LiquidWeb span={span} />
           </g>
           <g transform={`translate(800 ${schoolY})`}>
             {KRILL.map((fish, index) => {
-              const x = (fish.col / 11 - 0.5) * reach * 2 + fish.jx;
-              const y = (fish.row - 1) * 16 + fish.jy;
+              const ax = Math.cos(fish.angle);
+              const ay = Math.sin(fish.angle);
+              const bob = Math.sin(posed.clock * fish.speed + fish.phase) * 8;
+              const x = ax * reach + ax * bob;
+              const y = ay * reach * 0.4 + Math.cos(posed.clock * fish.speed + fish.phase) * 5;
               return (
                 <Swimmer
                   key={index}
@@ -141,14 +171,16 @@ function SeaWorld({ view }: { view: SeaView }) {
                   tint={fish.tint}
                   delay={fish.delay}
                   duration={fish.duration}
-                  face={face}
-                  fast={view.pull === "tight"}
+                  face={ax >= 0 ? 1 : -1}
+                  fast={false}
                 />
               );
             })}
-            <Puffer x={0} y={0} puff={net} face={face} fast={view.pull === "tight"} />
+          </g>
+          <g transform={`translate(800 ${pufferY})`}>
+            <Puffer x={0} y={0} puff={view.finale === "haul" ? lerp(net, 1, u) : net} face={1} fast={view.finale === "haul"} />
             {view.secretName ? (
-              <text y="64" textAnchor="middle" fill="#ffd166" fontSize="22" fontFamily="VT323, monospace">
+              <text y="58" textAnchor="middle" fill="#ffd166" fontSize="22" fontFamily="VT323, monospace">
                 {view.secretName}
               </text>
             ) : null}
@@ -167,45 +199,53 @@ const BUBBLES = Array.from({ length: 14 }, (_, i) => ({
   dur: 4 + (i % 4) * 0.6,
 }));
 
-function usePose(view: SeaView) {
+function useMotion(view: SeaView) {
   const target = {
     y: view.depth === "dive" ? -300 : 170,
     s: view.depth === "dive" ? 1.08 : 0.92,
     net: view.net,
     spread: view.spread,
-    schoolShift: view.pull === "bolt" ? 170 : view.pull === "miss" ? 28 : 0,
-    webExtra: view.pull === "tight" ? 78 : 0,
   };
-  const [pose, setPose] = useState(target);
-  const poseRef = useRef(target);
+  const [pose, setPose] = useState({ ...target, cruise: 0, clock: 0, finaleT: 0 });
+  const poseRef = useRef(pose);
+  const finaleRef = useRef(0);
+  const askedT = useRef(view.finaleT);
+  const askedPause = useRef(view.paused);
+  const askedFinale = useRef(view.finale);
+  askedT.current = view.finaleT;
+  askedPause.current = view.paused;
+  askedFinale.current = view.finale;
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      poseRef.current = target;
-      setPose(target);
-      return;
-    }
+    if (!view.finale) finaleRef.current = 0;
     let frame = 0;
-    const step = () => {
+    let last = performance.now();
+    const step = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
       const cur = poseRef.current;
+      if (askedT.current != null) finaleRef.current = askedT.current;
+      else if (askedFinale.current && !askedPause.current && !reduce) finaleRef.current = Math.min(1, finaleRef.current + dt / 10);
+      if (!askedFinale.current) finaleRef.current = 0;
+      const clock = reduce || askedPause.current ? cur.clock : cur.clock + dt;
       const next = {
         y: approach(cur.y, target.y),
         s: approach(cur.s, target.s),
         net: approach(cur.net, target.net),
         spread: approach(cur.spread, target.spread),
-        schoolShift: approach(cur.schoolShift, target.schoolShift),
-        webExtra: approach(cur.webExtra, target.webExtra),
+        cruise: Math.sin(clock * 0.42) * (view.depth === "dive" ? 64 : 220),
+        clock,
+        finaleT: reduce && askedFinale.current ? 1 : finaleRef.current,
       };
       poseRef.current = next;
       setPose(next);
-      const done = (Object.keys(target) as (keyof typeof target)[]).every((key) => Math.abs(next[key] - target[key]) < 0.4);
-      if (!done) frame = requestAnimationFrame(step);
+      frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-    // The latest target is read from this render. Restart when the asked pose changes.
+    // The clock reads the latest finale time from refs, so a parent frame doesn't restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.y, target.s, target.net, target.spread, target.schoolShift, target.webExtra]);
+  }, [target.y, target.s, target.net, target.spread, view.finale, view.depth]);
   return pose;
 }
 
@@ -227,12 +267,19 @@ function ripple(y: number, amp: number, length: number) {
   return d;
 }
 
-function Trailer() {
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+function smooth(t: number) {
+  const x = clamp(t);
+  return x * x * (3 - 2 * x);
+}
+
+function Trailer({ x }: { x: number }) {
   return (
-    <g transform="translate(800 348)">
-      <g>
-        <animateTransform attributeName="transform" type="translate" values="-340 0;340 0;-340 0" dur="18s" repeatCount="indefinite" />
-        <g className="trailer-bob">
+    <g transform={`translate(${800 + x} 348)`}>
+      <g className="trailer-bob">
         <g transform="scale(1.65)" shapeRendering="crispEdges">
         <ellipse cx="0" cy="10" rx="78" ry="8" fill="#083044" opacity="0.28" />
         <rect x={-92} y={-6} width={184} height={14} fill="#0e3a56" />
@@ -247,7 +294,6 @@ function Trailer() {
           trailer
         </text>
         </g>
-      </g>
       </g>
     </g>
   );

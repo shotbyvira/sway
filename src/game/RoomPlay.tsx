@@ -327,6 +327,9 @@ export function RoomPlay({
     spread: room?.spread ?? 0.62,
     pull: room?.pull ?? "idle",
     secretName: room?.status === "reveal" ? room.secret : null,
+    finale: room?.status === "reveal" && room.result ? (room.result.guessName === room.result.secretName ? "haul" : "slip") : null,
+    finaleT: null,
+    paused: room?.holdMs != null,
   });
 
   if (!room) {
@@ -846,41 +849,40 @@ function RevealPanel({
   const result = room.result!;
   const caught = result.guessName === result.secretName;
   const paused = room.holdMs != null;
-  const clockMs = room.clockMs ?? 10_000;
+  const scene = leftMs > 0 || paused;
   return (
     <div className="mt-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="px-head">{caught ? "Caught" : "It slipped"}</p>
-        <p className={"tabular-nums " + (paused ? "text-muted" : leftMs <= 3000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</p>
-      </div>
-      <div className={"px-meter mt-2 " + (leftMs <= 3000 && !paused ? "warn" : "")}>
-        <div
-          className={"h-full " + (paused ? "bg-fg" : leftMs <= 3000 ? "bg-warn" : "bg-tide")}
-          style={{ width: `${Math.max(0, Math.min(100, (leftMs / clockMs) * 100))}%` }}
-        />
-      </div>
-      <p className="mt-3 text-lg text-fg">The fish was {result.secretName}.</p>
-      <p className="mt-1 text-sm text-muted">
-        {result.guessName === "—" ? "No name in time." : `The skipper said ${result.guessName}.`} It finished #{result.rank}.
-      </p>
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <ScoreTile name={fishName} role="Fisheries" points={result.fisheriesPoints} tone="tide" />
-        <ScoreTile name={schoolName} role="School" points={result.schoolPoints} tone="amber" />
-      </div>
-      {room.blurs && (
-        <p className="mt-3 text-sm text-muted">
-          Fisheries were shown {room.blurs.fisheries}. The school was shown {room.blurs.school}.
-        </p>
+      {scene ? (
+        <>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="px-head">{caught ? "Hauling it up" : "Slipping through"}</p>
+            <p className={"tabular-nums " + (paused ? "text-muted" : leftMs <= 3000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</p>
+          </div>
+          <button type="button" disabled={pending} onClick={onHold} className="px-chip mt-3 min-h-12 px-3 disabled:opacity-40">
+            {paused ? "Resume" : "Pause"}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="px-head">{caught ? "Caught" : "It slipped"}</p>
+          <p className="mt-3 text-lg text-fg">The fish was {result.secretName}.</p>
+          <p className="mt-1 text-sm text-muted">
+            {result.guessName === "—" ? "No name in time." : `The skipper said ${result.guessName}.`} It finished #{result.rank}.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <ScoreTile name={fishName} role="Fisheries" points={result.fisheriesPoints} tone="tide" />
+            <ScoreTile name={schoolName} role="School" points={result.schoolPoints} tone="amber" />
+          </div>
+          {room.blurs && (
+            <p className="mt-3 text-sm text-muted">
+              Fisheries were shown {room.blurs.fisheries}. The school was shown {room.blurs.school}.
+            </p>
+          )}
+          <button type="button" disabled={pending} onClick={onNext} className="px-btn mt-4 min-h-12 w-full px-4 disabled:opacity-40">
+            {room.round >= room.rounds ? "See the match" : "Next cast"}
+          </button>
+        </>
       )}
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" disabled={pending} onClick={onHold} className="px-chip min-h-12 px-3 disabled:opacity-40">
-          {paused ? "Resume" : "Pause"}
-        </button>
-        <button type="button" disabled={pending} onClick={onNext} className="px-btn min-h-12 px-4 disabled:opacity-40">
-          {room.round >= room.rounds ? "See the match" : "Next cast"}
-        </button>
-      </div>
-      <p className="mt-2 text-sm text-muted">{paused ? "The clock is held." : "Ten seconds, then the next cast. Anyone can pause."}</p>
     </div>
   );
 }

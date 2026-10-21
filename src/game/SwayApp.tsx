@@ -207,7 +207,7 @@ const PLAY_STEPS = [
   "The fish stays hidden. The school sees a near lookalike. Fisheries see one farther away. The skipper sees neither.",
   "Forty-five seconds. Everyone except the skipper casts up to three lines, all at once. A line the water knows goes in the boat. A word it doesn't know is dead water, and it still costs a cast. Naming the fish, your lookalike, or its twin is thrown back. You can try again.",
   "Up to five deals, twelve seconds each. Two lines, and neither is labeled. The skipper taps one. That line hits the water. The other one splashes. A close fish makes the net wider and deeper. Lines that disagree spread the school sideways.",
-  "Fifteen seconds to name the fish, from the top of the net or a search. Then everyone sees it. A ten-second clock starts. Anyone can pause it. When it ends, the next cast begins. Play one, two, or three times each. The higher total wins.",
+  "Fifteen seconds to name the fish, from the top of the net or a search. A correct name hauls the fish up in the net. Anything else slips through. That scene runs for ten seconds, and anyone can pause it. The scores come after. Play one, two, or three times each. The higher total wins.",
 ];
 
 function HowToPlay() {

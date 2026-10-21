@@ -656,7 +656,6 @@ button.bg-fg {
 .puffer {
   transform-origin: center;
   transform-box: fill-box;
-  animation: party-swim 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
 .swimmer-fast,

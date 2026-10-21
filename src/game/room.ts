@@ -647,10 +647,6 @@ async function expireIfNeeded(sql: Sql, code: string): Promise<void> {
       if (!(await finishName(sql, room, null))) continue;
       return;
     }
-    if (room.status === "reveal" && timedOut) {
-      if (!(await advanceReveal(sql, room))) continue;
-      return;
-    }
     return;
   }
 }
@@ -760,8 +756,6 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
   const schoolBlur = meta.schoolStandIn ? findWord(meta.schoolStandIn) : undefined;
   const spread = room.status === "deal" || room.status === "name" || room.status === "reveal" ? meta.spread : 0.34;
   const net = room.status === "deal" || room.status === "name" || room.status === "reveal" ? meta.net : 0.22;
-  const caught = currentResult != null && currentResult.fisheriesPoints >= 80;
-  const slipped = currentResult != null && currentResult.fisheriesPoints < 40;
   const rounds = Math.max(1, Number(room.cycles)) * 2;
   const round = (Math.max(1, Number(room.cycle)) - 1) * 2 + (Number(room.half) === 1 ? 2 : 1);
   const status = (["lobby", "cast", "clue", "deal", "name", "reveal", "match"] as const).includes(
@@ -801,16 +795,9 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       clues,
       slotsLeft: Math.max(0, CLUES_PER - (you?.used ?? 0)),
       boat,
-      spread: status === "reveal" && caught ? Math.min(spread, 0.2) : spread,
-      net: status === "reveal" && caught ? Math.max(net, 0.94) : net,
-      pull:
-        status === "cast" || status === "clue" || status === "lobby"
-          ? "idle"
-          : status === "reveal" && caught
-            ? "tight"
-            : status === "reveal" && slipped
-              ? "bolt"
-              : meta.lastPull,
+      spread,
+      net,
+      pull: status === "cast" || status === "clue" || status === "lobby" ? "idle" : meta.lastPull,
       deal,
       result: status === "reveal" ? currentResult : null,
       results: status === "match" ? mapped : [],
