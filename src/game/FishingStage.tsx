@@ -312,9 +312,6 @@ function Trailer({ x }: { x: number }) {
         <rect x={-22} y={-44} width={16} height={12} fill="#4de3ff" />
         <rect x={2} y={-44} width={16} height={12} fill="#ff5d8f" />
         <rect x={-4} y={-86} width={4} height={28} fill="#e8f1ff" />
-        <text y={32} textAnchor="middle" fill="#f4fbff" fontSize="16" fontFamily="VT323, monospace">
-          trailer
-        </text>
       </g>
     </g>
   );

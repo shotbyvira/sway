@@ -77,10 +77,12 @@ export function RoomPlay({
   intent,
   onExit,
   onRegisterLeave,
+  onStatus,
 }: {
   intent: "make" | "join";
   onExit: () => void;
   onRegisterLeave: (leave: () => void) => void;
+  onStatus: (status: string | null) => void;
 }) {
   const createRoom = useServerFn(createRoomFn);
   const joinRoom = useServerFn(joinRoomFn);
@@ -108,6 +110,8 @@ export function RoomPlay({
   const tideFocus = useRef(false);
   const closedRef = useRef(false);
   const pendingRef = useRef(false);
+  const onStatusRef = useRef(onStatus);
+  onStatusRef.current = onStatus;
 
   const [room, setRoom] = useState<RoomView | null>(null);
   const [handle, setHandle] = useState("");
@@ -123,6 +127,14 @@ export function RoomPlay({
   const [query, setQuery] = useState("");
 
   codeRef.current = room?.code ?? codeRef.current;
+
+  useEffect(() => {
+    onStatusRef.current(room?.status ?? null);
+  }, [room?.status]);
+
+  useEffect(() => {
+    return () => onStatusRef.current(null);
+  }, []);
 
   function take(next: RoomView) {
     codeRef.current = next.code;

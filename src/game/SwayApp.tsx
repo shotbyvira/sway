@@ -15,8 +15,11 @@ export function SwayApp() {
   const [roomIntent, setRoomIntent] = useState<"make" | "join">("make");
   const [rulesOpen, setRulesOpen] = useState(false);
   const [guide, setGuide] = useState<null | "play" | "scores">(null);
+  const [roomStatus, setRoomStatus] = useState<string | null>(null);
   const [best, setBest] = useState<number | null>(null);
   const leaveRef = useRef<() => void>(() => {});
+  const guideRef = useRef<HTMLDivElement>(null);
+  const guideReturn = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     try {
@@ -46,16 +49,62 @@ export function SwayApp() {
   function goHome() {
     leaveRef.current();
     leaveRef.current = () => {};
+    setRoomStatus(null);
     setPhase("home");
   }
+
+  const inRound = phase === "room" && roomStatus != null && roomStatus !== "lobby" && roomStatus !== "match";
+  const showGuide = phase === "home" || (phase === "room" && roomStatus === "lobby");
+
+  useEffect(() => {
+    if (!showGuide && guide) setGuide(null);
+  }, [showGuide, guide]);
+
+  useEffect(() => {
+    if (!guide) return;
+    const root = guideRef.current;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    guideReturn.current = previous;
+    const focusable = () =>
+      root ? [...root.querySelectorAll<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])")] : [];
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setGuide(null);
+        return;
+      }
+      if (event.key !== "Tab" || !root) return;
+      const items = focusable();
+      if (items.length === 0) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      guideReturn.current?.focus();
+    };
+  }, [guide]);
 
   return (
     <SeaProvider>
     <main className="relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-10">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <button type="button" onClick={goHome} className="text-left">
+        {inRound ? (
           <p className="text-sm tracking-[0.35em] text-tide uppercase glow sm:tracking-[0.42em]">Sway</p>
-        </button>
+        ) : (
+          <button type="button" onClick={goHome} className="text-left">
+            <p className="text-sm tracking-[0.35em] text-tide uppercase glow sm:tracking-[0.42em]">Sway</p>
+          </button>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <p className="text-right text-xs tracking-widest text-muted uppercase sm:text-sm">
             {wordCount()} words
@@ -67,6 +116,7 @@ export function SwayApp() {
         </div>
       </header>
 
+      {showGuide && (
       <div className="mb-4 grid grid-cols-2 gap-2">
         <button
           type="button"
@@ -91,12 +141,17 @@ export function SwayApp() {
           Explain scores
         </button>
       </div>
+      )}
       {guide && (
         <div
           className="fixed inset-0 z-30 flex items-end justify-center bg-[#061422]/75 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => setGuide(null)}
         >
           <div
+            ref={guideRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sway-guide-title"
             className="mb-2 max-h-[78vh] w-full max-w-lg overflow-y-auto"
             onClick={(event) => event.stopPropagation()}
           >
@@ -169,6 +224,7 @@ export function SwayApp() {
           onRegisterLeave={(leave) => {
             leaveRef.current = leave;
           }}
+          onStatus={setRoomStatus}
         />
       )}
 
@@ -253,7 +309,7 @@ const PLAY_STEPS = [
 function HowToPlay() {
   return (
     <section className="px-panel w-full p-4 text-left">
-      <h2 className="px-rule text-2xl">How to play</h2>
+      <h2 id="sway-guide-title" className="px-rule text-2xl">How to play</h2>
       <ol className="mt-4 space-y-3">
         {PLAY_STEPS.map((step, index) => (
           <li key={index} className="flex gap-3 text-sm leading-relaxed text-muted">
@@ -276,7 +332,7 @@ const SPLITS: [string, number][] = [
 function ScoringGuide() {
   return (
     <section className="px-panel w-full p-4 text-left">
-      <h2 className="px-rule text-2xl">Explain scores</h2>
+      <h2 id="sway-guide-title" className="px-rule text-2xl">Explain scores</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted">
         Every round is {ROUND_POINTS} points, split between the crews. Fisheries keep what the skipper's name is
         worth. The school keeps whatever is left. A perfect catch takes the whole round. Silence hands the school the
