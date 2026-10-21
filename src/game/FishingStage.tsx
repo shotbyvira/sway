@@ -2,13 +2,13 @@ export type WaterPull = "idle" | "tight" | "bolt" | "miss";
 
 const ANGLES = [12, 58, 104, 156, 208, 254, 312];
 const TINTS = [
-  "var(--color-tide)",
-  "var(--color-amber)",
-  "var(--color-gold)",
-  "var(--color-fg)",
-  "var(--color-warn)",
-  "var(--color-schooler)",
-  "var(--color-deep)",
+  "var(--color-tide, #4de3ff)",
+  "var(--color-amber, #ff5d8f)",
+  "var(--color-gold, #ffd166)",
+  "var(--color-fg, #e8f1ff)",
+  "var(--color-warn, #ff9f43)",
+  "var(--color-schooler, #7deaff)",
+  "var(--color-deep, #bfa7ff)",
 ];
 const BUBBLES = [18, 70, 124, 168, 214, 262, 310];
 
@@ -95,14 +95,16 @@ export function FishingStage({
                     key={angle}
                     x={x}
                     y={y}
-                    scale={0.72}
+                    scale={2}
                     tint={TINTS[index % TINTS.length]!}
-                    delay={index * 0.17}
+                    delay={index % 2 === 0 ? -1.1 : -0.45}
+                    duration={index % 3 === 0 ? 2.9 : 2.6}
                     face={face}
+                    fast={pull === "tight"}
                   />
                 );
               })}
-              <Puffer x={0} y={0} puff={clampedNet} face={face} />
+              <Puffer x={0} y={0} puff={clampedNet} face={face} fast={pull === "tight"} />
               {secretName ? (
                 <text y="42" textAnchor="middle" fill="var(--color-gold)" fontSize="14" fontFamily="VT323, monospace">
                   {secretName}
@@ -128,47 +130,75 @@ function Swimmer({
   scale,
   tint,
   delay,
+  duration,
   face,
+  fast,
 }: {
   x: number;
   y: number;
   scale: number;
   tint: string;
   delay: number;
+  duration: number;
   face: number;
+  fast: boolean;
 }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${face * scale} ${scale})`}>
-      <g className="swimmer" style={{ animationDelay: `${delay}s` }}>
-        <g className="tail" style={{ animationDelay: `${delay * 0.6}s` }}>
-          <polygon points="-12,0 -23,-7 -18,0 -23,7" fill={tint} />
-        </g>
-        <ellipse cx="3" cy="0" rx="13" ry="5.5" fill={tint} />
-        <circle cx="10" cy="-1.5" r="1.2" fill="#04141c" />
+      <g
+        className={fast ? "swimmer swimmer-fast" : "swimmer"}
+        style={{ animationDelay: `${delay}s`, animationDuration: fast ? undefined : `${duration}s` }}
+      >
+        <PixelFish tint={tint} />
       </g>
     </g>
   );
 }
 
-function Puffer({ x, y, puff, face }: { x: number; y: number; puff: number; face: number }) {
-  const body = 14 + puff * 6;
-  const spike = 18 + puff * 16;
-  const angles = [0, 45, 90, 135, 180, 225, 270, 315];
+function PixelFish({ tint }: { tint: string }) {
+  const blocks = [
+    [-1, -1, 8, 2],
+    [0, -2, 6, 1],
+    [0, 1, 6, 1],
+    [-4, -1, 3, 2],
+    [-5, -2, 1, 1],
+    [-5, 1, 1, 1],
+  ];
+  return (
+    <g shapeRendering="crispEdges">
+      {blocks.map(([bx, by, w, h]) => (
+        <rect key={`${bx}-${by}`} x={bx} y={by} width={w} height={h} fill={tint} />
+      ))}
+      <rect x={5} y={-1} width={1} height={1} fill="#04141c" />
+    </g>
+  );
+}
+
+function Puffer({ x, y, puff, face, fast }: { x: number; y: number; puff: number; face: number; fast: boolean }) {
+  const radius = 4 + Math.round(puff * 3);
+  const cells: { x: number; y: number }[] = [];
+  for (let py = -radius; py <= radius; py++) {
+    const half = Math.round(Math.sqrt(Math.max(0, radius * radius - py * py)));
+    for (let px = -half; px <= half; px++) cells.push({ x: px, y: py });
+  }
+  const spike = radius + 2 + Math.round(puff * 3);
+  const spikes = [0, 45, 90, 135, 180, 225, 270, 315].map((angle) => {
+    const rad = (angle * Math.PI) / 180;
+    return { x: Math.round(Math.cos(rad) * spike), y: Math.round(Math.sin(rad) * spike * 0.8) };
+  });
+  const unit = 3;
+  const gold = "var(--color-gold, #ffd166)";
   return (
     <g transform={`translate(${x} ${y}) scale(${face} 1)`}>
-      <g className="puffer">
-        <ellipse className="swimmer-glow" cx="0" cy="0" rx={body + 10} ry={body * 0.8} fill="var(--color-gold)" />
-        {angles.map((angle) => {
-          const rad = (angle * Math.PI) / 180;
-          const ix = Math.cos(rad) * (body - 2);
-          const iy = Math.sin(rad) * (body * 0.72);
-          const ox = Math.cos(rad) * spike;
-          const oy = Math.sin(rad) * spike * 0.72;
-          return <polygon key={angle} points={`${ix},${iy - 2.2} ${ox},${oy} ${ix},${iy + 2.2}`} fill="var(--color-gold)" />;
-        })}
-        <ellipse cx="0" cy="0" rx={body} ry={body * 0.72} fill="var(--color-gold)" />
-        <ellipse cx="0" cy="1" rx={body * 0.55} ry={body * 0.28} fill="#ffe7a3" opacity="0.55" />
-        <circle cx={body * 0.35} cy={-2} r="1.7" fill="#04141c" />
+      <ellipse className="swimmer-glow" cx="0" cy="0" rx={radius * unit + 8} ry={radius * unit * 0.75 + 6} fill={gold} />
+      <g className={fast ? "puffer puffer-fast" : "puffer"} shapeRendering="crispEdges">
+        {spikes.map((cell) => (
+          <rect key={`${cell.x}-${cell.y}`} x={cell.x * unit} y={cell.y * unit} width={unit} height={unit} fill={gold} />
+        ))}
+        {cells.map((cell) => (
+          <rect key={`${cell.x}:${cell.y}`} x={cell.x * unit} y={cell.y * unit} width={unit} height={unit} fill={gold} />
+        ))}
+        <rect x={Math.round(radius * 0.35) * unit} y={-unit} width={unit} height={unit} fill="#04141c" />
       </g>
     </g>
   );

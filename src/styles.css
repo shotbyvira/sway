@@ -462,7 +462,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.35;
+  opacity: 0.18;
   background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
 }
 
@@ -572,23 +572,48 @@ button.bg-fg {
   transform-box: fill-box;
 }
 
-.swimmer {
-  transform-origin: 2px 0;
-  animation: swimmer 1.6s ease-in-out infinite;
+.swimmer,
+.puffer {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: party-swim 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
-.swimmer-big {
-  animation-duration: 2.2s;
-}
-
-.tail {
-  transform-origin: -10px 0;
-  animation: wag 0.42s ease-in-out infinite;
+.swimmer-fast,
+.puffer-fast {
+  animation-duration: 1.3s;
 }
 
 .swimmer-glow {
-  transform-origin: 2px 0;
-  animation: glow-pulse 2.2s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: gold-breathe 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes party-swim {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg) scaleX(1);
+  }
+  25% {
+    transform: translateY(-7px) rotate(2deg) scaleX(0.96);
+  }
+  50% {
+    transform: translateY(-2px) rotate(5deg) scaleX(1);
+  }
+  75% {
+    transform: translateY(-9px) rotate(-2deg) scaleX(0.97);
+  }
+}
+
+@keyframes gold-breathe {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+  50% {
+    opacity: 0.72;
+  }
 }
 
 .net-mesh {
@@ -623,37 +648,7 @@ button.bg-fg {
 }
 
 .puffer {
-  transform-origin: 0 0;
-  transform-box: fill-box;
-  animation: puff 2.4s ease-in-out infinite;
-}
-
-@keyframes puff {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.07);
-  }
-}
-
-@keyframes swimmer {
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(-8deg);
-  }
-  50% {
-    transform: translate(8px, -5px) rotate(10deg);
-  }
-}
-  0%,
-  100% {
-    transform: translate(0, 0) rotate(-8deg);
-  }
-  50% {
-    transform: translate(8px, -5px) rotate(10deg);
-  }
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--color-gold) 45%, transparent));
 }
 
 @keyframes wag {
