@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #101311;
+  --color-surface: #181d1a;
+  --color-surface-2: #222924;
+  --color-fg: #f3efe6;
+  --color-muted: #a39e93;
+  --color-line: #313a34;
+  --color-amber: #e2a04a;
+  --color-amber-ink: #1c1408;
+  --color-tide: #3cbaa2;
+  --color-tide-ink: #06211c;
+  --color-heat: #e15d45;
+  --color-heat-ink: #2a0d09;
+  --font-display: "Fraunces", ui-serif, georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --radius-lg: 1.1rem;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  ::selection {
+    background: #e2a04a;
+    color: #1c1408;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}

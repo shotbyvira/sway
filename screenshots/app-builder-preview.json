@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Sway",
+      "hasCanvas": false,
+      "bodyTextLen": 1678,
+      "bodyTextHash": "5b40fb31358153fe323c25951da7425d25e5dc84806ea920bd629ab63cf2b7c8",
+      "bodyTextPrefix": "PARTY ENGINE Sway 184 words 20 each · 5 min Drag the machine off",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Sway",
+      "hasCanvas": false,
+      "bodyTextLen": 1678,
+      "bodyTextHash": "5b40fb31358153fe323c25951da7425d25e5dc84806ea920bd629ab63cf2b7c8",
+      "bodyTextPrefix": "PARTY ENGINE Sway 184 words 20 each · 5 min Drag the machine off",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
