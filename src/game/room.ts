@@ -538,8 +538,11 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
   }
   const deals = meta.deals.map((deal, index) => (index === meta.deal ? current : deal));
   let net = meta.net;
-  if (pull === "tight") net = Math.min(1, net + 0.16);
-  else if (pull === "bolt") net = Math.max(0.16, net - 0.14);
+  if (pull === "tight") net = Math.min(1, net + 0.22);
+  else if (pull === "bolt") net = Math.max(0.12, net - 0.18);
+  const landed = deals
+    .filter((deal) => (deal.choice === "left" && deal.leftRole === "school") || (deal.choice === "right" && deal.rightRole === "school"))
+    .map((deal) => (deal.choice === "left" ? deal.leftText : deal.rightText));
   const nextIndex = meta.deal + 1;
   const more = nextIndex < deals.length;
   const next: Meta = {
@@ -549,6 +552,7 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
     lastPull: pull,
     pulls: meta.pulls + (applied ? 1 : 0),
     net,
+    spread: schoolSpread(landed),
   };
   const status = more ? "deal" : "name";
   const deadline = Date.now() + (more ? DEAL_MS : NAME_MS);

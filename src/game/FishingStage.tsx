@@ -11,9 +11,10 @@ export type SeaView = {
   finale: "haul" | "slip" | null;
   finaleT: number | null;
   paused: boolean;
+  beat: number;
 };
 
-const SURFACE: SeaView = { depth: "surface", net: 0.28, spread: 0.62, pull: "idle", secretName: null, finale: null, finaleT: null, paused: false };
+const SURFACE: SeaView = { depth: "surface", net: 0.28, spread: 0.62, pull: "idle", secretName: null, finale: null, finaleT: null, paused: false, beat: 0 };
 
 const SeaCtx = createContext<(next: SeaView) => void>(() => {});
 
@@ -29,10 +30,10 @@ export function SeaProvider({ children }: { children: ReactNode }) {
 
 export function useSea(view: SeaView) {
   const setView = useContext(SeaCtx);
-  const { depth, net, spread, pull, secretName, finale, finaleT, paused } = view;
+  const { depth, net, spread, pull, secretName, finale, finaleT, paused, beat } = view;
   useEffect(() => {
-    setView({ depth, net, spread, pull, secretName: secretName ?? null, finale, finaleT, paused });
-  }, [setView, depth, net, spread, pull, secretName, finale, finaleT, paused]);
+    setView({ depth, net, spread, pull, secretName: secretName ?? null, finale, finaleT, paused, beat });
+  }, [setView, depth, net, spread, pull, secretName, finale, finaleT, paused, beat]);
   useEffect(() => {
     return () => setView(SURFACE);
   }, [setView]);
@@ -81,23 +82,25 @@ function SeaWorld({ view }: { view: SeaView }) {
   const posed = useMotion(view);
   const net = clamp(posed.net);
   const spread = clamp(posed.spread);
-  const playSchool = 720 - net * 70;
+  const playSchool = 720 - net * 50;
   const playWeb = 500 + net * 190;
   const playSpan = 46 + net * 340;
-  const playReach = 70 + spread * 620;
+  const fan = spread * 260;
+  const surge = view.finale ? 0 : posed.surge;
+  const kind = posed.kind;
   const u = smooth(posed.finaleT);
-  let schoolY = playSchool;
-  let webY = playWeb;
-  let span = playSpan;
-  let reach = playReach;
-  let pufferY = playSchool;
+  let schoolY = playSchool + (kind === "bolt" ? surge * 130 : kind === "miss" ? surge * 16 : 0);
+  let webY = playWeb + (kind === "tight" ? surge * 96 : kind === "bolt" ? surge * -28 : kind === "miss" ? surge * 14 : 0);
+  let span = playSpan + (kind === "tight" ? surge * 50 : 0);
+  let reach = fan + (kind === "bolt" ? surge * 160 : 0);
+  let pufferY = schoolY - net * 24 - (kind === "tight" ? surge * 56 : 0) + (kind === "bolt" ? surge * 40 : 0);
   if (view.finale === "haul") {
     const close = Math.min(1, u / 0.32);
     const rise = smooth(Math.max(0, (u - 0.28) / 0.72));
     webY = lerp(lerp(playWeb, playSchool - 8, close), 392, rise);
     span = lerp(playSpan, 110, rise);
     pufferY = lerp(playSchool, webY + 26, Math.max(close, rise));
-    reach = lerp(playReach, 780, u);
+    reach = lerp(fan, 780, u);
     schoolY = playSchool + u * 36;
   } else if (view.finale === "slip") {
     const through = smooth(Math.min(1, u / 0.5));
@@ -106,7 +109,7 @@ function SeaWorld({ view }: { view: SeaView }) {
     span = lerp(playSpan, playSpan + 90, through);
     schoolY = playSchool + away * 40;
     pufferY = schoolY;
-    reach = lerp(playReach, 840, away);
+    reach = lerp(fan, 840, away);
   }
   const boatX = 800 + posed.cruise;
 
@@ -159,9 +162,12 @@ function SeaWorld({ view }: { view: SeaView }) {
             {KRILL.map((fish, index) => {
               const ax = Math.cos(fish.angle);
               const ay = Math.sin(fish.angle);
-              const bob = Math.sin(posed.clock * fish.speed + fish.phase) * 8;
-              const x = ax * reach + ax * bob;
-              const y = ay * reach * 0.4 + Math.cos(posed.clock * fish.speed + fish.phase) * 5;
+              const homeX = (fish.col / 11 - 0.5) * (120 + spread * 70);
+              const homeY = (fish.row - 1) * 18 + fish.jy;
+              const swim = Math.sin(posed.clock * fish.speed + fish.phase) * (8 + surge * 10);
+              const x = homeX + ax * reach + ax * swim;
+              const y = homeY + ay * reach * 0.35 + Math.cos(posed.clock * fish.speed * 0.8 + fish.phase) * 5;
+              const facing = ax * reach + swim >= 0 ? 1 : -1;
               return (
                 <Swimmer
                   key={index}
@@ -171,8 +177,8 @@ function SeaWorld({ view }: { view: SeaView }) {
                   tint={fish.tint}
                   delay={fish.delay}
                   duration={fish.duration}
-                  face={ax >= 0 ? 1 : -1}
-                  fast={false}
+                  face={facing}
+                  fast={kind === "bolt" && surge > 0.2}
                 />
               );
             })}
@@ -206,15 +212,21 @@ function useMotion(view: SeaView) {
     net: view.net,
     spread: view.spread,
   };
-  const [pose, setPose] = useState({ ...target, cruise: 0, clock: 0, finaleT: 0 });
+  const [pose, setPose] = useState({ ...target, cruise: 0, clock: 0, finaleT: 0, surge: 0, kind: "idle" as WaterPull });
   const poseRef = useRef(pose);
   const finaleRef = useRef(0);
   const askedT = useRef(view.finaleT);
   const askedPause = useRef(view.paused);
   const askedFinale = useRef(view.finale);
+  const askedPull = useRef(view.pull);
+  const askedBeat = useRef(view.beat);
+  const lastBeat = useRef(view.beat);
+  const surgeRef = useRef(0);
   askedT.current = view.finaleT;
   askedPause.current = view.paused;
   askedFinale.current = view.finale;
+  askedPull.current = view.pull;
+  askedBeat.current = view.beat;
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!view.finale) finaleRef.current = 0;
@@ -227,6 +239,11 @@ function useMotion(view: SeaView) {
       if (askedT.current != null) finaleRef.current = askedT.current;
       else if (askedFinale.current && !askedPause.current && !reduce) finaleRef.current = Math.min(1, finaleRef.current + dt / 10);
       if (!askedFinale.current) finaleRef.current = 0;
+      if (askedBeat.current !== lastBeat.current) {
+        lastBeat.current = askedBeat.current;
+        if (askedPull.current !== "idle") surgeRef.current = 1;
+      }
+      surgeRef.current *= Math.exp(-dt * 1.7);
       const clock = reduce || askedPause.current ? cur.clock : cur.clock + dt;
       const next = {
         y: approach(cur.y, target.y),
@@ -236,6 +253,8 @@ function useMotion(view: SeaView) {
         cruise: Math.sin(clock * 0.42) * (view.depth === "dive" ? 64 : 220),
         clock,
         finaleT: reduce && askedFinale.current ? 1 : finaleRef.current,
+        surge: reduce ? 0 : surgeRef.current,
+        kind: askedPull.current,
       };
       poseRef.current = next;
       setPose(next);
@@ -250,7 +269,7 @@ function useMotion(view: SeaView) {
 }
 
 function approach(from: number, to: number) {
-  const next = from + (to - from) * 0.16;
+  const next = from + (to - from) * 0.1;
   return Math.abs(next - to) < 0.35 ? to : next;
 }
 

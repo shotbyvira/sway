@@ -38,6 +38,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   const [picked, setPicked] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [revealLeft, setRevealLeft] = useState(REVEAL_MS);
+  const [beat, setBeat] = useState(0);
   const memoryRef = useRef<PromptMemory>(emptyMemory());
   const lockRef = useRef(false);
   const deadlineRef = useRef(performance.now() + DEAL_MS);
@@ -95,8 +96,8 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
       setScores(applied.scores);
       setNet((prev) => {
         if (applied.shrug) return prev;
-        if (afterRank < beforeRank || afterScore > beforeScore + 0.05) return Math.min(1, prev + 0.16);
-        if (afterRank > beforeRank || afterScore < beforeScore - 0.05) return Math.max(0.16, prev - 0.14);
+        if (afterRank < beforeRank || afterScore > beforeScore + 0.05) return Math.min(1, prev + 0.22);
+        if (afterRank > beforeRank || afterScore < beforeScore - 0.05) return Math.max(0.12, prev - 0.18);
         return prev;
       });
       if (applied.shrug) setPull("miss");
@@ -105,6 +106,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
       else setPull("miss");
       play(applied.shrug ? "dead" : afterRank < beforeRank || afterScore > beforeScore + 0.05 ? "tight" : afterRank > beforeRank || afterScore < beforeScore - 0.05 ? "bolt" : "miss");
     }
+    setBeat((n) => n + 1);
     if (index + 1 >= pairs.length) {
       setPhase("name");
       arm(NAME_MS);
@@ -154,6 +156,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
     finale: phase === "reveal" ? (caught ? "haul" : "slip") : null,
     finaleT: phase === "reveal" ? 1 - revealLeft / REVEAL_MS : null,
     paused,
+    beat,
   });
 
   return (

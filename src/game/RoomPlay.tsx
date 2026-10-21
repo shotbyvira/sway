@@ -330,6 +330,7 @@ export function RoomPlay({
     finale: room?.status === "reveal" && room.result ? (room.result.guessName === room.result.secretName ? "haul" : "slip") : null,
     finaleT: null,
     paused: room?.holdMs != null,
+    beat: (room?.round ?? 0) * 20 + (room?.deal?.index ?? 0),
   });
 
   if (!room) {
