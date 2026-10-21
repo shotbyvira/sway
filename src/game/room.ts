@@ -515,7 +515,7 @@ async function closeClue(sql: Sql, room: RoomRow): Promise<boolean> {
     ...meta,
     deals,
     deal: 0,
-    spread: schoolSpread(schoolLines.map((row) => row.body)),
+    spread: schoolSpread([]),
     net: 0.22,
     lastPull: "idle",
     pulls: 0,
@@ -555,8 +555,11 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
   let net = meta.net;
   if (pull === "tight") net = Math.min(1, net + 0.22);
   else if (pull === "bolt") net = Math.max(0.12, net - 0.18);
-  const landed = deals
-    .filter((deal) => (deal.choice === "left" && deal.leftRole === "school") || (deal.choice === "right" && deal.rightRole === "school"))
+  // Every tapped line feeds the spread, whoever wrote it. Counting only school
+  // lines made the school move on their taps and sit still on the crew's, which
+  // told the skipper who wrote the card.
+  const tapped = deals
+    .filter((deal) => deal.choice === "left" || deal.choice === "right")
     .map((deal) => (deal.choice === "left" ? deal.leftText : deal.rightText));
   const nextIndex = meta.deal + 1;
   const more = nextIndex < deals.length;
@@ -567,7 +570,7 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
     lastPull: pull,
     pulls: meta.pulls + 1,
     net,
-    spread: schoolSpread(landed),
+    spread: schoolSpread(tapped),
   };
   const status = more ? "deal" : "name";
   const deadline = Date.now() + (more ? DEAL_MS : NAME_MS);

@@ -882,6 +882,9 @@ function RevealPanel({
             <ScoreTile name={fishName} role="Fisheries" points={result.fisheriesPoints} tone="tide" />
             <ScoreTile name={schoolName} role="School" points={result.schoolPoints} tone="amber" />
           </div>
+          <p className="mt-3 text-sm text-muted">
+            This round splits 120. Fisheries keep what the name earns. The school keeps the rest. Rank is shown, not paid.
+          </p>
           {room.blurs && (
             <p className="mt-3 text-sm text-muted">
               Fisheries were shown {room.blurs.fisheries}. The school was shown {room.blurs.school}.

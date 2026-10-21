@@ -14,6 +14,7 @@ export function SwayApp() {
   const [phase, setPhase] = useState<Phase>("home");
   const [roomIntent, setRoomIntent] = useState<"make" | "join">("make");
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [guide, setGuide] = useState<null | "play" | "scores">(null);
   const [best, setBest] = useState<number | null>(null);
   const leaveRef = useRef<() => void>(() => {});
 
@@ -66,6 +67,47 @@ export function SwayApp() {
         </div>
       </header>
 
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className="px-chip min-h-11 px-3 text-sm"
+          aria-expanded={guide === "play"}
+          onClick={() => {
+            play("tap");
+            setGuide((open) => (open === "play" ? null : "play"));
+          }}
+        >
+          How to play
+        </button>
+        <button
+          type="button"
+          className="px-chip min-h-11 px-3 text-sm"
+          aria-expanded={guide === "scores"}
+          onClick={() => {
+            play("tap");
+            setGuide((open) => (open === "scores" ? null : "scores"));
+          }}
+        >
+          Explain scores
+        </button>
+      </div>
+      {guide && (
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-[#061422]/75 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          onClick={() => setGuide(null)}
+        >
+          <div
+            className="mb-2 max-h-[78vh] w-full max-w-lg overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {guide === "play" ? <HowToPlay /> : <ScoringGuide />}
+            <button type="button" onClick={() => setGuide(null)} className="px-chip mt-2 min-h-11 w-full px-3 text-sm">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {phase === "home" && (
         <section className="rise flex flex-1 flex-col items-center text-center">
           <h1 className="px-title font-display text-6xl sm:text-8xl">SWAY</h1>
@@ -114,11 +156,9 @@ export function SwayApp() {
           {rulesOpen && (
             <div className="px-panel rise mt-4 p-4 text-left text-base leading-relaxed text-muted">
               <p>Every word sits on a grid of traits. A cast is a claim about the fish. When the skipper taps a line, the water checks each claim against the hidden fish. Mostly true closes the net. Mostly false scatters the school. Half and half barely moves it.</p>
-              <p className="mt-3">The top of the net only knows the lines the skipper tapped. It never sees the fish, so a tapped lie drags it off course. Only the water knows which lines were true.</p>
+              <p className="mt-3">Lines that disagree spread the school sideways. A crew line does it the same as a school line, so the fan never says who wrote the card.</p>
             </div>
           )}
-          <HowToPlay />
-          <ScoringGuide />
         </section>
       )}
 
@@ -206,13 +246,13 @@ const PLAY_STEPS = [
   "A toss chooses which crew holds the net first. A compass chooses their skipper. They have twenty seconds to cast — if they don't, the water does. The crews swap every round, and a skipper isn't picked twice until that whole crew has held the net.",
   "The fish stays hidden. The school sees a near lookalike. Fisheries see one farther away. The skipper sees neither.",
   "Forty-five seconds. Everyone except the skipper casts up to three lines, all at once. A line the water knows goes in the boat. A word it doesn't know is dead water, and it still costs a cast. Naming the fish, your lookalike, or its twin is thrown back. You can try again.",
-  "Up to five deals, twelve seconds each, one for each of the crew's first five lines. Two lines, and neither is labeled. Only the skipper can read them. The skipper taps one. That line hits the water. The other one splashes. Mostly true closes the net. Mostly false scatters the school. If the school casts too few lines, the water writes theirs.",
-  "Fifteen seconds to name the fish, from the top of the net or a search. A correct name hauls the fish up in the net. Anything else slips through. That scene runs for ten seconds, and anyone can pause it. The scores come after. Play one, two, or three times each. The higher total wins.",
+  "Up to five deals, twelve seconds each, one for each of the crew's first five lines. Two lines, and neither is labeled. Only the skipper can read them. The skipper taps one. That line hits the water. The other one splashes. Mostly true closes the net. Mostly false scatters the school. Lines that disagree spread the school sideways, whoever wrote them. If the school casts too few lines, the water writes theirs.",
+  "Fifteen seconds to name the fish, from the top of the net or a search. A correct name hauls the fish up in the net. Anything else slips through. That scene runs for ten seconds, and anyone can pause it. Then the round splits 120 points. Tap Explain scores for the table. Play one, two, or three times each. The higher total wins.",
 ];
 
 function HowToPlay() {
   return (
-    <section className="px-panel mt-8 w-full p-4 text-left">
+    <section className="px-panel w-full p-4 text-left">
       <h2 className="px-rule text-2xl">How to play</h2>
       <ol className="mt-4 space-y-3">
         {PLAY_STEPS.map((step, index) => (
@@ -235,13 +275,14 @@ const SPLITS: [string, number][] = [
 
 function ScoringGuide() {
   return (
-    <section className="px-panel mt-3 w-full p-4 text-left">
-      <h2 className="px-rule text-2xl">Scoring</h2>
+    <section className="px-panel w-full p-4 text-left">
+      <h2 className="px-rule text-2xl">Explain scores</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted">
-        Every round splits {ROUND_POINTS} points. Fisheries keep what the skipper's name earns. The school keeps
-        the rest.
+        Every round is {ROUND_POINTS} points, split between the crews. Fisheries keep what the skipper's name is
+        worth. The school keeps whatever is left. A perfect catch takes the whole round. Silence hands the school the
+        whole round.
       </p>
-      <div className="mt-4 grid grid-cols-[1fr_6.5rem_4.5rem] items-baseline gap-x-2">
+      <div className="mt-4 grid grid-cols-[1fr_4.75rem_4.25rem] items-baseline gap-x-2">
         <span className="px-kicker">The name</span>
         <span className="px-kicker live text-right">Fisheries</span>
         <span className="px-kicker hold text-right">School</span>
@@ -250,7 +291,7 @@ function ScoringGuide() {
         {SPLITS.map(([where, fish]) => (
           <li
             key={where}
-            className="grid grid-cols-[1fr_6.5rem_4.5rem] items-baseline gap-x-2 border-t border-line py-2 text-sm"
+            className="grid grid-cols-[1fr_4.75rem_4.25rem] items-baseline gap-x-2 border-t border-line py-2 text-sm"
           >
             <span className="text-muted">{where}</span>
             <span className="text-right tabular-nums text-fg">{fish}</span>
@@ -258,7 +299,14 @@ function ScoringGuide() {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-sm leading-relaxed text-muted">Add every round. The higher total wins.</p>
+      <p className="mt-3 text-sm leading-relaxed text-muted">
+        A very close shape shares most of the fish's traits. A halfway neighbor shares some. Anything further, or
+        no name at all, pays the school the full {ROUND_POINTS}.
+      </p>
+      <p className="mt-3 text-sm leading-relaxed text-muted">
+        Rank is how deep the fish sat on the skipper's list. It shows after the scene. It is not paid. Add every
+        round. The higher total wins.
+      </p>
     </section>
   );
 }

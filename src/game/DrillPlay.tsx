@@ -28,7 +28,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   const [scores, setScores] = useState<Map<string, number>>(() => initialScores());
   const [net, setNet] = useState(0.22);
   const [pull, setPull] = useState<"idle" | "tight" | "bolt" | "miss">("idle");
-  const [schoolLines, setSchoolLines] = useState<string[]>([]);
+  const [tapped, setTapped] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [leftMs, setLeftMs] = useState(DEAL_MS);
   const [picked, setPicked] = useState<string | null>(null);
@@ -82,8 +82,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
       play("miss");
     } else {
       const text = side === 0 ? deal.left : deal.right;
-      const who = side === 0 ? deal.leftSide : deal.rightSide;
-      if (who === "school") setSchoolLines((lines) => [...lines, text]);
+      setTapped((lines) => [...lines, text]);
       const applied = applyPrompt(scores, text, memoryRef.current);
       const reading = applied.shrug ? "miss" : readLine(text, secret.id);
       setScores(applied.scores);
@@ -134,7 +133,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   }, [phase, paused]);
   const guess = picked ? findWord(picked) : undefined;
   const scored = phase === "reveal" ? roundScore(picked, secret.id, scores) : null;
-  const spread = schoolSpread(schoolLines);
+  const spread = schoolSpread(tapped);
   const caught = picked != null && picked === secret.id;
   useSea({
     depth: "dive",
@@ -231,7 +230,8 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
             {picked && picked === secret.id ? "Caught." : guess ? `You named ${guess.name}.` : "The clock took the guess."}
           </p>
           <p className="mt-2 text-sm text-muted">
-            The fish was {secret.name}. It finished #{scored.rank}. Fisheries {scored.fisheries}, school {scored.school}.
+            The fish was {secret.name}. It finished #{scored.rank}. This round splits 120: fisheries {scored.fisheries},
+            school {scored.school}.
           </p>
         </div>
       )}
