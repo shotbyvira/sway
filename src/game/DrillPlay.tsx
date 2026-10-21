@@ -14,6 +14,7 @@ import {
   type PromptMemory,
 } from "./engine";
 import { FishingStage } from "./FishingStage";
+import { play } from "./sound";
 import { DEAL_MS, NAME_MS } from "./rules";
 
 type Phase = "deal" | "name" | "reveal";
@@ -77,6 +78,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
     lockRef.current = true;
     if (side < 0) {
       setPull("miss");
+      play("miss");
     } else {
       const text = side === 0 ? deal.left : deal.right;
       const beforeRank = rankOf(scores, secret.id);
@@ -95,6 +97,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
       else if (afterRank < beforeRank || afterScore > beforeScore + 0.05) setPull("tight");
       else if (afterRank > beforeRank || afterScore < beforeScore - 0.05) setPull("bolt");
       else setPull("miss");
+      play(applied.shrug ? "dead" : afterRank < beforeRank || afterScore > beforeScore + 0.05 ? "tight" : afterRank > beforeRank || afterScore < beforeScore - 0.05 ? "bolt" : "miss");
     }
     if (index + 1 >= pairs.length) {
       setPhase("name");
@@ -111,6 +114,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
     setPicked(wordId);
     const scored = roundScore(wordId, secret.id, scores);
     onScore(scored.fisheries);
+    play(scored.fisheries >= 80 ? "catch" : scored.fisheries > 0 ? "tight" : "miss");
     setPhase("reveal");
   }
 
@@ -125,7 +129,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
           {phase === "reveal" ? "The water stills" : phase === "name" ? "Name it" : `Deal ${index + 1} of ${pairs.length}`}
         </h1>
         {phase !== "reveal" && (
-          <p className={"tabular-nums " + (leftMs <= 5000 ? "text-heat" : "text-tide")}>{formatClock(leftMs)}</p>
+          <p className={"tabular-nums " + (leftMs <= 5000 ? "text-warn" : "text-tide")}>{formatClock(leftMs)}</p>
         )}
       </div>
       <div className="mt-3">
@@ -142,7 +146,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
               key={i}
               type="button"
               onClick={() => choose(i === 0 ? 0 : 1)}
-              className="px-panel min-h-16 px-3 py-3 text-left text-lg leading-snug text-fg"
+              className="px-say min-h-16 px-3 py-3 text-left text-lg leading-snug"
             >
               {text}
             </button>
@@ -195,9 +199,9 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
         {phase === "reveal" ? "Back" : "Leave the drill"}
       </button>
       {phase !== "reveal" && (
-        <div className="mt-2 h-2 overflow-hidden bg-surface-2">
+        <div className={"px-meter mt-2 " + (leftMs <= 5000 ? "warn" : "")}>
           <div
-            className={"h-full " + (leftMs <= 5000 ? "bg-heat" : "bg-tide")}
+            className={"h-full " + (leftMs <= 5000 ? "bg-warn" : "bg-tide")}
             style={{ width: `${Math.max(0, Math.min(100, (leftMs / clockMs) * 100))}%` }}
           />
         </div>

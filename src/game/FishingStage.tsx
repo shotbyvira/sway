@@ -48,7 +48,7 @@ export function FishingStage({
   const face = pull === "bolt" ? 1 : -1;
 
   return (
-    <figure className="px-panel overflow-hidden">
+    <figure className={"px-panel overflow-hidden " + (pull === "bolt" ? "stage-shake" : "")}>
       <div className="stage-frame">
         <svg viewBox="0 0 360 210" className="fish-stage block w-full" role="img" aria-label={`${caption} ${netWord(clampedNet)}. ${spreadWord(clampedSpread)}.`}>
           <rect width="360" height="210" fill="#071422" />

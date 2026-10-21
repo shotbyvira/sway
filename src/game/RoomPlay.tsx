@@ -31,12 +31,32 @@ import {
   savedTeam,
   seatId,
 } from "./seat";
+import { play, type Cue } from "./sound";
 
 function formatClock(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function cueRoom(prev: RoomView, next: RoomView) {
+  let cue: Cue | null = null;
+  if (prev.status !== next.status) {
+    if (next.status === "clue") cue = "cast";
+    else if (next.status === "name") cue = "name";
+    else if (next.status === "reveal" && next.result) cue = next.result.fisheriesPoints >= 80 ? "catch" : next.result.fisheriesPoints > 0 ? "tight" : "miss";
+    else if (next.status === "deal") cue = "deal";
+  } else if (next.status === "deal" && next.deal && next.deal.index !== prev.deal?.index) {
+    cue = "deal";
+  }
+  if (next.pull !== prev.pull && next.pull !== "idle") {
+    cue = next.pull === "tight" ? "tight" : next.pull === "bolt" ? "bolt" : "dead";
+  }
+  if (next.clues.length > prev.clues.length) {
+    cue = next.clues[next.clues.length - 1]?.dead ? "dead" : "accept";
+  }
+  if (cue) play(cue);
 }
 
 function sideLabel(side: Side, room: RoomView): string {
@@ -107,6 +127,7 @@ export function RoomPlay({
     rememberRoom(next.code);
     setRoom((prev) => {
       if (prev && prev.code === next.code && next.version < prev.version) return prev;
+      if (prev) cueRoom(prev, next);
       return next;
     });
   }
@@ -352,7 +373,7 @@ export function RoomPlay({
           type="button"
           disabled={pending}
           onClick={enter}
-          className="px-btn mt-6 flex min-h-14 w-full items-center justify-center gap-2 px-4 py-3 disabled:opacity-40"
+          className="px-commit mt-6 flex min-h-14 w-full items-center justify-center gap-2 px-4 py-3 disabled:opacity-40"
         >
           {intent === "join" ? "▼ Join ▼" : "▼ Open the room ▼"}
           <ArrowRight className="size-5" aria-hidden="true" />
@@ -621,7 +642,7 @@ function CastPanel({
       <p className="text-center font-display text-3xl leading-none">{skipper}</p>
       <p className="mt-2 text-center text-sm text-muted">The needle picked the skipper. They do not know the fish.</p>
       {room.youAre === "skipper" ? (
-        <button type="button" disabled={pending} onClick={onCast} className="px-btn mt-4 min-h-14 w-full px-4 disabled:opacity-40">
+        <button type="button" disabled={pending} onClick={onCast} className="px-commit mt-4 min-h-14 w-full px-4 disabled:opacity-40">
           ▼ Cast the net ▼
         </button>
       ) : (
@@ -686,7 +707,7 @@ function CluePanel({
             aria-label="Your cast"
             className="min-h-12 flex-1 px-3 text-fg outline-none"
           />
-          <button type="submit" disabled={pending || !draft.trim()} className="px-btn min-h-12 px-3 disabled:opacity-40">
+          <button type="submit" disabled={pending || !draft.trim()} className="px-commit min-h-12 px-3 disabled:opacity-40">
             Cast · {room.slotsLeft}
           </button>
         </form>
@@ -695,7 +716,7 @@ function CluePanel({
       {room.clues.length > 0 && (
         <ul className="mt-3 space-y-2">
           {room.clues.map((clue, i) => (
-            <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+            <li key={i} className={"px-say flex items-baseline justify-between gap-3 px-3 py-2 text-sm " + (clue.dead ? "is-bad" : "is-ok")}>
               <span className="text-fg">{clue.text}</span>
               <span className={clue.dead ? "text-warn" : "text-tide"}>{clue.dead ? "Dead water" : "Accepted"}</span>
             </li>

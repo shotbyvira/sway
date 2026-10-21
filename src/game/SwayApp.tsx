@@ -3,6 +3,7 @@ import { DrillPlay } from "./DrillPlay";
 import { wordCount } from "./engine";
 import { RoomPlay } from "./RoomPlay";
 import { recalledRoom } from "./seat";
+import { play, setMuted } from "./sound";
 
 type Phase = "home" | "room" | "drill";
 
@@ -48,15 +49,18 @@ export function SwayApp() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-8 flex items-baseline justify-between gap-3">
+      <header className="mb-8 flex items-center justify-between gap-3">
         <button type="button" onClick={goHome} className="text-left">
           <p className="text-sm tracking-[0.42em] text-tide uppercase glow">Sway</p>
         </button>
-        <p className="text-right text-sm tracking-widest text-muted uppercase">
-          {wordCount()} words
-          <br />
-          {best != null ? `Best catch ${best}` : "4+ · own phones"}
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-right text-sm tracking-widest text-muted uppercase">
+            {wordCount()} words
+            <br />
+            {best != null ? `Best catch ${best}` : "4+ · own phones"}
+          </p>
+          <SoundButton />
+        </div>
       </header>
 
       {phase === "home" && (
@@ -71,6 +75,7 @@ export function SwayApp() {
             <button
               type="button"
               onClick={() => {
+                play("tap");
                 setRoomIntent("make");
                 setPhase("room");
               }}
@@ -82,6 +87,7 @@ export function SwayApp() {
               <button
                 type="button"
                 onClick={() => {
+                  play("tap");
                   setRoomIntent("join");
                   setPhase("room");
                 }}
@@ -89,7 +95,7 @@ export function SwayApp() {
               >
                 Join
               </button>
-              <button type="button" onClick={() => setPhase("drill")} className="px-chip min-h-12 px-3">
+              <button type="button" onClick={() => { play("tap"); setPhase("drill"); }} className="px-chip min-h-12 px-3">
                 Solo drill
               </button>
             </div>
@@ -127,6 +133,35 @@ export function SwayApp() {
   );
 }
 
+function SoundButton() {
+  const [off, setOff] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sway.mute") === "1";
+      setOff(stored);
+      setMuted(stored);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  return (
+    <button
+      type="button"
+      className={"px-mute " + (off ? "off" : "")}
+      aria-pressed={off}
+      aria-label={off ? "Unmute sound" : "Mute sound"}
+      onClick={() => {
+        const next = !off;
+        setOff(next);
+        setMuted(next);
+        if (!next) play("tap");
+      }}
+    >
+      {off ? "Muted" : "Sound"}
+    </button>
+  );
+}
+
 const PLAY_STEPS = [
   "Make a room and share the code. Two teams, at least two a side, four or more, sides within one player. Everyone plays from their own phone.",
   "A toss picks who is Fisheries first. A compass picks their skipper. Later rounds swap sides. The compass won't pick the same skipper twice until that side has all had the net.",
@@ -139,7 +174,7 @@ const PLAY_STEPS = [
 function HowToPlay() {
   return (
     <section className="px-panel mt-8 w-full p-4 text-left">
-      <h2 className="text-2xl tracking-[0.18em] text-tide uppercase">How to play</h2>
+      <h2 className="px-rule text-2xl">How to play</h2>
       <ol className="mt-4 space-y-3">
         {PLAY_STEPS.map((step, index) => (
           <li key={index} className="flex gap-3 text-sm leading-relaxed text-muted">
@@ -155,7 +190,7 @@ function HowToPlay() {
 function ScoringGuide({ total }: { total: number }) {
   return (
     <section className="px-panel mt-3 w-full p-4 text-left">
-      <h2 className="text-2xl tracking-[0.18em] text-tide uppercase">Scoring</h2>
+      <h2 className="px-rule text-2xl">Scoring</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted">
         Both crews can score a round. Fisheries are paid for the name. The school is paid for how deep the fish sank in
         the list of {total}, and only if the skipper missed.
