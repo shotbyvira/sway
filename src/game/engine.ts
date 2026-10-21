@@ -41,6 +41,12 @@ for (const word of WORDS) {
 
 const BY_LENGTH = [...WORDS].sort((a, b) => b.name.length - a.name.length);
 
+/** Compiled once. Building 184 patterns on every parse was most of parsePrompt's cost. */
+const NAME_PATTERNS = BY_LENGTH.map((word) => {
+  const pattern = `\\b${escapeRegExp(word.name.toLowerCase())}\\b`;
+  return { word, find: new RegExp(pattern), strip: new RegExp(pattern, "g") };
+});
+
 function sameShape(a: Word, b: Word): boolean {
   if (a.yes.size !== b.yes.size) return false;
   for (const feature of a.yes) if (!b.yes.has(feature)) return false;
@@ -99,16 +105,15 @@ export function parsePrompt(raw: string): ParsedPrompt {
 
   for (const clause of clauses) {
     let scrubbed = ` ${clause} `;
-    for (const word of BY_LENGTH) {
-      const pattern = `\\b${escapeRegExp(word.name.toLowerCase())}\\b`;
-      const hit = new RegExp(pattern).exec(scrubbed);
+    for (const { word, find, strip } of NAME_PATTERNS) {
+      const hit = find.exec(scrubbed);
       if (!hit) continue;
       const before = scrubbed.slice(Math.max(0, hit.index - 16), hit.index);
       const negative = NAME_NEGATION.test(before);
       if (mentions.length < 3 && !mentions.some((mention) => mention.id === word.id)) {
         mentions.push({ id: word.id, sign: negative ? -1 : 1 });
       }
-      scrubbed = scrubbed.replace(new RegExp(pattern, "g"), " ");
+      scrubbed = scrubbed.replace(strip, " ");
     }
 
     let flipRemain = 0;
@@ -486,8 +491,43 @@ function article(word: string): string {
   return /^[aeiou]/.test(word) ? "an" : "a";
 }
 
-function pickOne<T>(items: readonly T[]): T | undefined {
-  return items[Math.floor(Math.random() * items.length)];
+function shuffled<T>(items: readonly T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+function readsCold(line: string, secretId: string): boolean {
+  const parsed = parsePrompt(line);
+  return parsed.mentions.length === 0 && parsed.assertions.length > 0 && readLine(line, secretId) === "bolt";
+}
+
+function decoyCandidates(word: Word, fish: Word): string[] {
+  const lacks = [...word.yes].filter((feature) => !fish.yes.has(feature));
+  const adjs = lacks.flatMap((feature) =>
+    (DECOY_ADJ[feature] ?? []).filter((say) => !BANK_NAMES.has(say)).map((say) => ({ feature, say })),
+  );
+  const nouns = lacks.flatMap((feature) => {
+    const say = DECOY_NOUN[feature];
+    return say ? [{ feature, say }] : [];
+  });
+  const out: string[] = [];
+  for (const noun of nouns) {
+    for (const adj of adjs) {
+      if (adj.feature !== noun.feature) out.push(`${article(adj.say)} ${adj.say} ${noun.say}`);
+    }
+    out.push(`some kind of ${noun.say}`);
+  }
+  for (const a of adjs) {
+    for (const b of adjs) {
+      if (a.feature < b.feature) out.push(`${a.say} and ${b.say}`);
+    }
+    out.push(`really ${a.say}`);
+  }
+  return out;
 }
 
 /**
@@ -497,39 +537,15 @@ function pickOne<T>(items: readonly T[]): T | undefined {
 export function decoyLine(secretId: string, avoid: ReadonlySet<string> = new Set()): string {
   const fish = WORD_BY_ID.get(secretId);
   if (!fish) return "something loud";
+  // Walk far words and their phrasings lazily, in random order. Parsing every candidate up front
+  // cost ~144 ms of CPU per decoy, and closeClue can need five in one request.
   const far = WORDS.filter((word) => word.id !== secretId && traitDistance(word.id, secretId) >= 0.6);
-  const candidates: string[] = [];
-  for (const word of far) {
-    const lacks = [...word.yes].filter((feature) => !fish.yes.has(feature));
-    const adjs = lacks.flatMap((feature) =>
-      (DECOY_ADJ[feature] ?? []).filter((say) => !BANK_NAMES.has(say)).map((say) => ({ feature, say })),
-    );
-    const nouns = lacks.flatMap((feature) => {
-      const say = DECOY_NOUN[feature];
-      return say ? [{ feature, say }] : [];
-    });
-    for (const noun of nouns) {
-      for (const adj of adjs) {
-        if (adj.feature !== noun.feature) candidates.push(`${article(adj.say)} ${adj.say} ${noun.say}`);
-      }
-      candidates.push(`some kind of ${noun.say}`);
-    }
-    for (const a of adjs) {
-      for (const b of adjs) {
-        if (a.feature < b.feature) candidates.push(`${a.say} and ${b.say}`);
-      }
-      candidates.push(`really ${a.say}`);
+  for (const word of shuffled(far)) {
+    for (const line of shuffled(decoyCandidates(word, fish))) {
+      if (!avoid.has(line) && readsCold(line, secretId)) return line;
     }
   }
-  const usable = [...new Set(candidates)].filter(
-    (line) =>
-      !avoid.has(line) &&
-      parsePrompt(line).mentions.length === 0 &&
-      promptLands(line) &&
-      readLine(line, secretId) === "bolt",
-  );
   const fallback = FEATURES.filter((feature) => !fish.yes.has(feature)).map((feature) => `it is ${feature}`);
-  const cold = fallback.filter((line) => readLine(line, secretId) === "bolt");
-  return pickOne(usable) ?? pickOne(cold) ?? "something loud";
+  return shuffled(fallback).find((line) => readsCold(line, secretId)) ?? "something loud";
 }
 

@@ -114,6 +114,13 @@ for (const fish of SECRET_POOL) {
   check(!blockedName(decoy, fish.id, null), `${fish.name}: decoy "${decoy}" is blocked`);
 }
 
+{
+  const started = performance.now();
+  for (let i = 0; i < 30; i += 1) decoyLine(SECRET_POOL[i % SECRET_POOL.length]!.id);
+  const each = (performance.now() - started) / 30;
+  check(each < 15, `decoyLine costs ${each.toFixed(1)} ms of CPU per call; closeClue may need five`);
+}
+
 const curly = parsePrompt("it isn\u2019t big").assertions.find((a) => a.feature === "large");
 check(curly?.sign === -1, "a curly apostrophe must still negate");
 const contrast = parsePrompt("not hot but cold").assertions;

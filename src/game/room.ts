@@ -1133,7 +1133,10 @@ async function advanceReveal(sql: Sql, room: RoomRow): Promise<boolean> {
     cycle += 1;
     half = 0;
   } else done = true;
-  if (done) {
+  // A crew that walked out can't hold the net or be the school. End the match instead of
+  // reopening a round that slips straight back to reveal.
+  const sides = new Set((await loadPlayers(sql, room.code)).map((player) => sideOf(player.team)));
+  if (done || sides.size < 2) {
     const updated = await sql<{ version: number }>`
       update sway_rooms
       set status = 'match', deadline = null, version = version + 1
