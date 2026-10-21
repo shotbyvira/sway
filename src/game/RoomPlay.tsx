@@ -401,9 +401,9 @@ export function RoomPlay({
           type="button"
           disabled={pending}
           onClick={enter}
-          className="mt-6 flex min-h-12 items-center justify-between rounded-lg bg-amber px-4 py-3 font-medium text-amber-ink disabled:opacity-40"
+          className="px-btn mt-6 flex min-h-14 w-full items-center justify-center px-4 py-3 disabled:opacity-40"
         >
-          {intent === "join" ? "Join" : "Open the room"}
+          {intent === "join" ? "▼ Join ▼" : "▼ Open the room ▼"}
           <ArrowRight className="size-5" aria-hidden="true" />
         </button>
       </section>
@@ -430,11 +430,11 @@ export function RoomPlay({
         <div className="rise flex flex-1 flex-col">
           <p className="text-xs tracking-widest text-muted uppercase">Room</p>
           <div className="mt-1 flex items-center justify-between gap-3">
-            <p className="font-display text-5xl tracking-[0.18em]">{room.code}</p>
+            <p className="glow font-display text-6xl tracking-[0.22em]">{room.code}</p>
             <button
               type="button"
               onClick={() => void copyCode()}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm"
+              className="px-chip inline-flex min-h-11 items-center gap-2 px-3 text-sm"
             >
               <Copy className="size-4" aria-hidden="true" />
               {copied ? "Copied" : "Copy"}
@@ -484,7 +484,7 @@ export function RoomPlay({
                   }),
                 )
               }
-              className="mt-3 min-h-11 rounded-lg border border-line bg-surface text-sm text-fg disabled:opacity-40"
+              className="px-chip mt-3 min-h-11 text-sm disabled:opacity-40"
             >
               Switch to {sideLabel(otherSide(you.team), room)}
             </button>
@@ -525,7 +525,7 @@ export function RoomPlay({
                 return startRoom({ data: { code: room.code, playerId: playerIdRef.current } });
               })
             }
-            className="mt-4 flex min-h-12 items-center justify-between rounded-lg bg-amber px-4 py-3 font-medium text-amber-ink disabled:opacity-40"
+            className="px-btn mt-4 flex min-h-14 w-full items-center justify-center px-4 py-3 disabled:opacity-40"
           >
             {amberDraft.trim() || room.amberName} plants first
             <ArrowRight className="size-5" aria-hidden="true" />
@@ -564,7 +564,7 @@ export function RoomPlay({
                     type="button"
                     onClick={() => setCategory(cat)}
                     className={
-                      "min-h-10 shrink-0 rounded-full border px-3 text-sm " +
+                      "min-h-10 shrink-0 border px-3 text-sm " +
                       (category === cat ? "border-fg bg-fg text-bg" : "border-line bg-surface text-muted")
                     }
                   >
@@ -596,7 +596,7 @@ export function RoomPlay({
                 <button
                   type="button"
                   onClick={() => setPicked(randomWord(picked?.id))}
-                  className="min-h-12 rounded-lg border border-line bg-surface px-4 text-sm"
+                  className="px-chip min-h-12 px-4 text-sm"
                 >
                   Surprise
                 </button>
@@ -609,7 +609,7 @@ export function RoomPlay({
                       lockWord({ data: { code: room.code, playerId: playerIdRef.current, wordId: picked.id } }),
                     )
                   }
-                  className="min-h-12 flex-1 rounded-lg bg-amber px-4 font-medium text-amber-ink disabled:opacity-40"
+                  className="px-btn min-h-12 flex-1 px-4 disabled:opacity-40"
                 >
                   Lock {picked ? picked.name : "a word"}
                 </button>
@@ -654,7 +654,7 @@ export function RoomPlay({
               <p className={"text-right font-medium tabular-nums " + (leftMs <= 60_000 ? "text-heat" : "text-amber")}>
                 {formatClock(leftMs)}
               </p>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div className="mt-1 h-2 overflow-hidden bg-surface-2">
                 <div
                   className={"h-full " + (leftMs <= 60_000 ? "bg-heat" : "bg-amber")}
                   style={{ width: `${Math.max(0, Math.min(100, (leftMs / CLOCK_MS) * 100))}%` }}
@@ -705,7 +705,7 @@ export function RoomPlay({
               <button
                 type="submit"
                 disabled={!draft.trim() || pending}
-                className="min-h-12 rounded-lg bg-amber px-4 font-medium text-amber-ink disabled:opacity-40"
+                className="px-btn min-h-12 px-4 disabled:opacity-40"
               >
                 Feed
               </button>
@@ -756,7 +756,7 @@ export function RoomPlay({
           {room.prompts.length > 0 && (
             <ul className="mt-4 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
               {room.prompts.map((line, index) => (
-                <li key={`${line.handle}-${index}-${line.text}`} className="rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted">
+                <li key={`${line.handle}-${index}-${line.text}`} className="border border-line bg-surface px-3 py-1 text-sm text-muted">
                   <span className="text-fg">{line.handle}</span> · {line.shrug ? "shrugged" : line.text}
                   {line.resisted && <span className="ml-1 text-heat">held</span>}
                   <span className="ml-1 text-fg">#{line.rank}</span>
@@ -810,7 +810,7 @@ export function RoomPlay({
             type="button"
             disabled={pending}
             onClick={() => void run(() => advanceRoom({ data: { code: room.code, playerId: playerIdRef.current } }))}
-            className="mt-auto flex min-h-12 items-center justify-between rounded-lg bg-fg px-4 py-3 font-medium text-bg disabled:opacity-40"
+            className="px-btn mt-auto flex min-h-12 items-center justify-between px-4 py-3 disabled:opacity-40"
           >
             {room.half === 1 && room.cycle >= room.cycles ? "See the table" : "Next plant"}
             <ArrowRight className="size-5" aria-hidden="true" />
@@ -843,14 +843,14 @@ export function RoomPlay({
           </ul>
           {error && <p className="mt-3 text-sm text-heat">{error}</p>}
           <div className="mt-auto flex gap-2 pt-6">
-            <button type="button" onClick={exitRoom} className="min-h-12 rounded-lg border border-line px-4 text-sm">
+            <button type="button" onClick={exitRoom} className="px-chip min-h-12 px-4 text-sm">
               Home
             </button>
             <button
               type="button"
               disabled={pending}
               onClick={() => void run(() => rematchRoom({ data: { code: room.code, playerId: playerIdRef.current } }))}
-              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-amber font-medium text-amber-ink disabled:opacity-40"
+              className="px-btn flex min-h-12 flex-1 items-center justify-center gap-2 disabled:opacity-40"
             >
               <RotateCcw className="size-4" aria-hidden="true" />
               Rematch
@@ -883,7 +883,7 @@ function TeamColumn({
 }) {
   const tide = tone === "tide";
   return (
-    <div className={"rounded-lg border p-3 " + (tide ? "border-tide/40" : "border-amber/40")}>
+    <div className={"px-panel border-t-4 p-3 " + (tide ? "border-tide" : "border-amber")}>
       {editable ? (
         <input
           value={name}

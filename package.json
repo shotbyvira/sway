@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
     "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
+    "deploy": "WORKERS_CI=1 npm run build && wrangler deploy",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "node scripts/with-app-env.mjs vite build --mode development",
     "preview": "node scripts/with-app-env.mjs vite preview",
@@ -21,6 +22,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@cloudflare/vite-plugin": "^1.64.0",
     "@electric-sql/pglite": "^0.5.4",
     "@hookform/resolvers": "^5.7.0",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -75,6 +77,7 @@
     "typescript": "^5.7.0",
     "vaul": "^1.1.2",
     "vite": "^8.2.0",
+    "wrangler": "^4.151.3",
     "zod": "^4.4.0",
     "zustand": "^5.0.0"
   },

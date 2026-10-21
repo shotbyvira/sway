@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #101311;
-  --color-surface: #181d1a;
-  --color-surface-2: #222924;
-  --color-fg: #f3efe6;
-  --color-muted: #a39e93;
-  --color-line: #313a34;
-  --color-amber: #e2a04a;
-  --color-amber-ink: #1c1408;
-  --color-tide: #3cbaa2;
-  --color-tide-ink: #06211c;
-  --color-heat: #e15d45;
-  --color-heat-ink: #2a0d09;
-  --font-display: "Fraunces", ui-serif, georgia, serif;
-  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --radius-lg: 1.1rem;
+  --color-bg: #050a14;
+  --color-surface: #0d1830;
+  --color-surface-2: #101d33;
+  --color-fg: #e8f1ff;
+  --color-muted: #7d93b8;
+  --color-line: #1b3050;
+  --color-amber: #ff5d8f;
+  --color-amber-ink: #1a0610;
+  --color-tide: #4de3ff;
+  --color-tide-ink: #04141c;
+  --color-heat: #ff5d8f;
+  --color-heat-ink: #2a1020;
+  --font-display: "VT323", ui-monospace, monospace;
+  --font-sans: "VT323", ui-monospace, monospace;
+  --radius-lg: 0px;
 }
 
 @layer base {
@@ -26,7 +26,7 @@
 
   html,
   body {
-    background: var(--color-bg);
+    background: #050a14;
     color: var(--color-fg);
     font-family: var(--font-sans);
     min-height: 100%;
@@ -34,12 +34,131 @@
 
   body {
     margin: 0;
+    font-size: 18px;
+    line-height: 1.45;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 80% 46% at 50% -12%, rgba(77, 227, 255, 0.2), transparent 58%),
+      radial-gradient(ellipse 70% 36% at 50% 118%, rgba(10, 40, 78, 0.85), transparent 60%),
+      #050a14;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.45;
+    background-image:
+      radial-gradient(circle, rgba(77, 227, 255, 0.55) 1px, transparent 1.6px),
+      radial-gradient(circle, rgba(232, 241, 255, 0.28) 1px, transparent 1.6px);
+    background-size: 160px 240px, 110px 180px;
+    background-position: 12% 120%, 78% 140%;
+    animation: bubbles 26s linear infinite;
+  }
+
+  body > * {
+    position: relative;
+    z-index: 1;
   }
 
   ::selection {
-    background: #e2a04a;
-    color: #1c1408;
+    background: #4de3ff;
+    color: #04141c;
   }
+
+  input,
+  button {
+    font-family: inherit;
+  }
+
+  input {
+    border-radius: 0;
+    background-color: #0d1830;
+    box-shadow:
+      0 0 0 2px #050a14,
+      0 0 0 4px #1b3050;
+  }
+
+  input:focus {
+    box-shadow:
+      0 0 0 2px #050a14,
+      0 0 0 4px #4de3ff,
+      0 0 18px rgba(77, 227, 255, 0.28);
+  }
+}
+
+.px-btn {
+  background-color: #101d33;
+  color: #e8f1ff;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow:
+    0 0 0 3px #050a14,
+    0 0 0 5px #4de3ff,
+    0 5px 0 5px #123048,
+    0 0 22px rgba(77, 227, 255, 0.32);
+}
+
+.px-btn:hover:not(:disabled) {
+  color: #4de3ff;
+}
+
+.px-btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 3px #050a14,
+    0 0 0 5px #4de3ff,
+    0 2px 0 5px #123048;
+}
+
+.px-btn:disabled {
+  color: #7d93b8;
+  box-shadow:
+    0 0 0 3px #050a14,
+    0 0 0 5px #1b3050,
+    0 5px 0 5px #0b1424;
+}
+
+.px-chip {
+  background-color: #0d1830;
+  color: #7d93b8;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow:
+    0 0 0 2px #050a14,
+    0 0 0 4px #1b3050,
+    0 4px 0 4px #0b1424;
+}
+
+.px-chip:hover:not(:disabled) {
+  color: #e8f1ff;
+}
+
+.px-panel {
+  background-color: #0d1830;
+  box-shadow:
+    0 0 0 2px #050a14,
+    0 0 0 4px #1b3050,
+    4px 4px 0 #0b1424;
+}
+
+.glow {
+  text-shadow: 0 0 18px rgba(77, 227, 255, 0.55);
+}
+
+button.bg-amber,
+button.bg-tide,
+button.bg-fg {
+  box-shadow: 0 4px 0 #0b1424;
 }
 
 @keyframes rise {
@@ -53,12 +172,22 @@
   }
 }
 
+@keyframes bubbles {
+  from {
+    background-position: 12% 120%, 78% 160%;
+  }
+  to {
+    background-position: 12% -40%, 78% -20%;
+  }
+}
+
 .rise {
   animation: rise 220ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise {
+  .rise,
+  body::after {
     animation: none;
   }
 }

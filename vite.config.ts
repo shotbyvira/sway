@@ -145,39 +145,56 @@ function authPopupPlugin(): Plugin {
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
-export default defineConfig(({ command, isPreview }) => ({
-  server: {
-    host: "0.0.0.0",
-    port: 8080,
-    strictPort: true,
-  },
-  preview: {
-    host: "127.0.0.1",
-    port: 8081,
-    strictPort: true,
-  },
-  resolve: { tsconfigPaths: true },
-  plugins: [
-    pgliteBootstrapPlugin(),
-    // Before tanstackStart so /auth/popup never falls through to the SPA.
-    authPopupPlugin(),
-    // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
-    appEnvPlugin(),
-    // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
-    grokPwaPlugin(),
-    tailwindcss(),
-    tanstackStart(),
-    ...(command === "build" || isPreview
-      ? [
-          nitro({
-            preset: "vercel",
-            // Auto-registers server/middleware/* (the PWA install page +
-            // manifest + head-tag middleware). Nitro v3 defaults serverDir to
-            // false, so removing this silently unwires /?install=1 on deploys.
-            serverDir: "./server",
-          }),
-        ]
-      : []),
-    viteReact(),
-  ],
-}));
+//
+// Cloudflare Workers Builds sets WORKERS_CI=1 and runs `npm run build`.
+// That path must use the Cloudflare Vite plugin (and not Nitro's Vercel
+// preset). Local and Vercel builds keep Nitro so preview and the platform
+// deploy stay on the existing output.
+export default defineConfig(async ({ command, isPreview }) => {
+  const onCloudflare = process.env.WORKERS_CI === "1";
+  const cloudflarePlugin =
+    onCloudflare && (command === "build" || isPreview)
+      ? (await import("@cloudflare/vite-plugin")).cloudflare({
+          viteEnvironment: { name: "ssr" },
+        })
+      : null;
+
+  return {
+    server: {
+      host: "0.0.0.0",
+      port: 8080,
+      strictPort: true,
+    },
+    preview: {
+      host: "127.0.0.1",
+      port: 8081,
+      strictPort: true,
+    },
+    resolve: { tsconfigPaths: true },
+    plugins: [
+      pgliteBootstrapPlugin(),
+      // Before tanstackStart so /auth/popup never falls through to the SPA.
+      authPopupPlugin(),
+      // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
+      appEnvPlugin(),
+      // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
+      grokPwaPlugin(),
+      tailwindcss(),
+      // Cloudflare's plugin has to sit ahead of TanStack Start.
+      ...(cloudflarePlugin ? [cloudflarePlugin] : []),
+      tanstackStart(),
+      ...(!cloudflarePlugin && (command === "build" || isPreview)
+        ? [
+            nitro({
+              preset: "vercel",
+              // Auto-registers server/middleware/* (the PWA install page +
+              // manifest + head-tag middleware). Nitro v3 defaults serverDir to
+              // false, so removing this silently unwires /?install=1 on deploys.
+              serverDir: "./server",
+            }),
+          ]
+        : []),
+      viteReact(),
+    ],
+  };
+});

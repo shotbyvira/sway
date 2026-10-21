@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Dices, Timer } from "lucide-react";
+import { ArrowRight, Timer } from "lucide-react";
 import {
   applyPrompt,
   emptyMemory,
@@ -228,76 +228,70 @@ export function SwayApp() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-6 flex items-baseline justify-between gap-3">
+      <header className="mb-8 flex items-baseline justify-between gap-3">
         <button type="button" onClick={goHome} className="text-left">
-          <p className="text-xs tracking-[0.22em] text-muted uppercase">Party engine</p>
-          <p className="font-display text-3xl leading-none text-fg">Sway</p>
+          <p className="text-sm tracking-[0.42em] text-tide uppercase glow">Sway</p>
         </button>
-        <p className="text-right text-xs text-muted">
+        <p className="text-right text-sm tracking-widest text-muted uppercase">
           {wordCount()} words
           <br />
-          {best != null ? `Drill best ${best}` : "20 each · 5 min"}
+          {best != null ? `Best ${best}` : "20 each · 5 min"}
         </p>
       </header>
 
       {phase === "home" && (
-        <section className="rise flex flex-1 flex-col">
-          <h1 className="font-display text-4xl leading-[1.05] text-fg sm:text-5xl">
-            Drag the machine off the word.
+        <section className="rise flex flex-1 flex-col items-center text-center">
+          <h1 className="font-display text-7xl leading-none tracking-[0.14em] text-fg glow sm:text-8xl">
+            SWAY
           </h1>
-          <p className="mt-4 max-w-md text-base leading-relaxed text-muted">
-            Open a room and share the code. Both teams join from their own phones and type at the same time.
-            One side plants a secret. The other has five minutes, twenty prompts each, to drag the machine off it.
+          <p className="mt-2 text-xl tracking-[0.28em] text-tide uppercase">Drag it under</p>
+          <p className="mt-4 max-w-sm text-lg leading-relaxed text-muted">
+            Share a code. Both teams play from their own phones. Twenty prompts, five minutes, one machine
+            that does not want to let go.
           </p>
-          <div className="mt-8 flex flex-col gap-3">
+          <div className="mt-8 flex w-full flex-col gap-4">
             <button
               type="button"
               onClick={() => {
                 setRoomIntent("make");
                 setPhase("room");
               }}
-              className="flex min-h-12 items-center justify-between rounded-lg bg-amber px-4 py-3 text-left font-medium text-amber-ink"
+              className="px-btn min-h-14 w-full px-4 py-3"
             >
-              Make a room
-              <ArrowRight className="size-5" aria-hidden="true" />
+              ▼ Make a room ▼
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRoomIntent("join");
-                setPhase("room");
-              }}
-              className="flex min-h-12 items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-left font-medium text-fg"
-            >
-              Join a room
-              <ArrowRight className="size-5 text-tide" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={startDrill}
-              className="flex min-h-12 items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 text-left font-medium text-fg"
-            >
-              Solo drill
-              <Dices className="size-5 text-tide" aria-hidden="true" />
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setRoomIntent("join");
+                  setPhase("room");
+                }}
+                className="px-chip min-h-12 px-3"
+              >
+                Join
+              </button>
+              <button type="button" onClick={startDrill} className="px-chip min-h-12 px-3">
+                Solo drill
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setRulesOpen((v) => !v)}
-              className="min-h-11 text-left text-sm text-muted underline-offset-4 hover:underline"
+              className="min-h-11 text-sm tracking-widest text-muted uppercase"
             >
-              {rulesOpen ? "Hide how the machine thinks" : "How the machine thinks"}
+              {rulesOpen ? "Hide the machine" : "How the machine thinks"}
             </button>
           </div>
           {rulesOpen && (
-            <div className="rise mt-4 rounded-lg border border-line bg-surface p-4 text-sm leading-relaxed text-muted">
+            <div className="px-panel rise mt-4 p-4 text-left text-base leading-relaxed text-muted">
               <p>
                 Every word in the bank sits on a grid of traits — alive, metal, flies, sweet — the same
-                shape as the old 20Q neural net, which kept a weight between each object and each question.
+                shape as the old 20Q net.
               </p>
               <p className="mt-3">
                 A prompt is a claim. Traits that fit the secret feed it. A lie is doubted, and the machine
-                hauls its word back. The grip is strong at first — scattershot opposites bounce. Stay on one
-                distant theme and the grip tires.
+                hauls its word back. Stay on one distant theme and the grip tires.
               </p>
             </div>
           )}
@@ -369,8 +363,8 @@ const SCORE_BANDS: { where: string; points: string }[] = [
 
 function HowToPlay() {
   return (
-    <section className="mt-8 rounded-lg border border-line bg-surface p-4">
-      <h2 className="font-display text-2xl leading-none text-fg">How to play</h2>
+    <section className="px-panel mt-8 w-full p-4 text-left">
+      <h2 className="text-2xl tracking-[0.18em] text-tide uppercase">How to play</h2>
       <ol className="mt-4 space-y-3">
         {PLAY_STEPS.map((step, index) => (
           <li key={index} className="flex gap-3 text-sm leading-relaxed text-muted">
@@ -385,8 +379,8 @@ function HowToPlay() {
 
 function ScoringGuide({ total }: { total: number }) {
   return (
-    <section className="mt-3 rounded-lg border border-line bg-surface p-4">
-      <h2 className="font-display text-2xl leading-none text-fg">Scoring</h2>
+    <section className="px-panel mt-3 w-full p-4 text-left">
+      <h2 className="text-2xl tracking-[0.18em] text-tide uppercase">Scoring</h2>
       <p className="mt-3 text-sm leading-relaxed text-muted">
         When the sway ends, the machine names one guess. Your points depend on where the secret still sits
         in its list of {total} words. Rank 1 means it never left the top.
@@ -477,7 +471,7 @@ function SwayTurn({
           <p className={"text-right font-medium tabular-nums " + (urgent ? "text-heat" : "text-amber")}>
             {formatClock(leftMs)}
           </p>
-          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+          <div className="mt-1 h-2 overflow-hidden bg-surface-2">
             <div
               className={"h-full " + (urgent ? "bg-heat" : "bg-amber")}
               style={{ width: `${Math.max(0, Math.min(100, ratio * 100))}%` }}
@@ -526,7 +520,7 @@ function SwayTurn({
         <button
           type="submit"
           disabled={!draft.trim()}
-          className="min-h-12 rounded-lg bg-amber px-4 font-medium text-amber-ink disabled:opacity-40"
+          className="px-btn min-h-12 px-4 disabled:opacity-40"
         >
           Feed
         </button>
@@ -561,7 +555,7 @@ function SwayTurn({
       {logs.length > 0 && (
         <ul className="mt-4 flex max-h-28 flex-wrap gap-2 overflow-y-auto">
           {logs.map((line, i) => (
-            <li key={i} className="rounded-full border border-line bg-surface px-3 py-1 text-xs text-muted">
+            <li key={i} className="border border-line bg-surface px-3 py-1 text-sm text-muted">
               {line.shrug ? "shrugged" : line.text}
               {line.resisted && <span className="ml-1 text-heat">held</span>}
               <span className="ml-1 text-fg">#{line.rank}</span>
@@ -615,7 +609,7 @@ function Reveal({
           <span>Same traits</span>
           <span>Nothing in common</span>
         </div>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-2">
+          <div className="mt-1 h-2 overflow-hidden bg-surface-2">
           <div className="h-full bg-amber" style={{ width: `${Math.round(result.distance * 100)}%` }} />
         </div>
       </div>
@@ -630,7 +624,7 @@ function Reveal({
       <button
         type="button"
         onClick={onNext}
-        className="mt-auto flex min-h-12 items-center justify-between rounded-lg bg-fg px-4 py-3 font-medium text-bg"
+        className="px-btn mt-auto flex min-h-12 items-center justify-between px-4 py-3"
       >
         {nextLabel}
         <ArrowRight className="size-5" aria-hidden="true" />
