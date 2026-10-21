@@ -289,10 +289,9 @@ export function traitDistance(aId: string, bId: string): number {
 }
 
 export function pointsFor(rank: number, distance: number, guessId: string, secretId: string): number {
-  if (guessId === secretId) return 0;
+  if (guessId === secretId || rank <= 1) return 0;
   let base = 100;
-  if (rank <= 1) base = 10;
-  else if (rank <= 5) base = 20;
+  if (rank <= 5) base = 20;
   else if (rank <= 20) base = 50;
   else if (rank <= 100) base = 80;
   else base = 100;

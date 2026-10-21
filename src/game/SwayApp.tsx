@@ -50,13 +50,13 @@ export function SwayApp() {
 
   return (
     <SeaProvider>
-    <main className="relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-8 flex items-center justify-between gap-3">
+    <main className="relative z-10 mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-10">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <button type="button" onClick={goHome} className="text-left">
-          <p className="text-sm tracking-[0.42em] text-tide uppercase glow">Sway</p>
+          <p className="text-sm tracking-[0.35em] text-tide uppercase glow sm:tracking-[0.42em]">Sway</p>
         </button>
-        <div className="flex items-center gap-3">
-          <p className="text-right text-sm tracking-widest text-muted uppercase">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <p className="text-right text-xs tracking-widest text-muted uppercase sm:text-sm">
             {wordCount()} words
             <br />
             {best != null ? `Best catch ${best}` : "4+ · own phones"}
@@ -68,7 +68,7 @@ export function SwayApp() {
 
       {phase === "home" && (
         <section className="rise flex flex-1 flex-col items-center text-center">
-          <h1 className="px-title font-display text-7xl sm:text-8xl">SWAY</h1>
+          <h1 className="px-title font-display text-6xl sm:text-8xl">SWAY</h1>
           <p className="px-tag mt-3 text-xl">Catch the big fish</p>
           <p className="mt-4 max-w-sm text-lg leading-relaxed text-fg">
             Two crews, one hidden fish. The school tries to swim it clear. Fisheries try to drop the net on it. Only the

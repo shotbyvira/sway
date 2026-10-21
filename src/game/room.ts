@@ -87,6 +87,7 @@ export type RoomView = {
   spread: number;
   net: number;
   pull: Pull;
+  pulls: number;
   deal: RoomDeal | null;
   result: RoomResult | null;
   results: RoomResult[];
@@ -550,7 +551,7 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
     deals,
     deal: more ? nextIndex : meta.deal,
     lastPull: pull,
-    pulls: meta.pulls + (applied ? 1 : 0),
+    pulls: meta.pulls + 1,
     net,
     spread: schoolSpread(landed),
   };
@@ -802,6 +803,7 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       spread,
       net,
       pull: status === "cast" || status === "clue" || status === "lobby" ? "idle" : meta.lastPull,
+      pulls: meta.pulls,
       deal,
       result: status === "reveal" ? currentResult : null,
       results: status === "match" ? mapped : [],
