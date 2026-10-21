@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getSql, type Sql } from "@/lib/db";
+import { getSql, hasBoundSql, type Sql } from "@/lib/db";
 import {
   applyPrompt,
   blockedName,
@@ -32,11 +32,12 @@ import {
 } from "./rules";
 
 export type RoomStatus = "lobby" | "cast" | "clue" | "deal" | "name" | "reveal" | "match";
-export type Pull = "idle" | "tight" | "bolt" | "miss";
+export type Pull = "idle" | "tight" | "bolt" | "miss" | "skip";
 export type SeatRole = "skipper" | "fisheries" | "school";
 
 export type RoomPlayer = { id: string; handle: string; team: Side; used: number };
-export type RoomClue = { text: string; dead: boolean };
+export type RoomClue = { text: string; dead: boolean; fate: "dealt" | "benched" | null };
+export type RoomNote = { text: string; pull: Pull };
 
 export type RoomDeal = {
   index: number;
@@ -84,6 +85,7 @@ export type RoomView = {
   clockMs: number | null;
   holdMs: number | null;
   clues: RoomClue[];
+  notes: RoomNote[];
   slotsLeft: number;
   boat: { fisheries: number; school: number };
   spread: number;
@@ -94,9 +96,10 @@ export type RoomView = {
   result: RoomResult | null;
   results: RoomResult[];
   tally: { amber: number; tide: number };
+  serverNow: number;
 };
 
-export type RoomResponse = { ok: true; room: RoomView } | { ok: false; error: string };
+export type RoomResponse = { ok: true; room: RoomView } | { ok: false; error: string; room?: RoomView };
 
 const seatSchema = z.string().regex(/^[a-zA-Z0-9-]{8,64}$/);
 const teamSchema = z.enum(["amber", "tide"]);
@@ -108,7 +111,7 @@ const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
  * A phone's seat id is its only key, so it never leaves the server as-is. Rows, views and the
  * skipper id all carry this digest instead: every phone can see it, and none can act with it.
  */
-async function seatKey(seat: string): Promise<string> {
+export async function seatKey(seat: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`sway-seat:${seat}`));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0"))
     .join("")
@@ -125,6 +128,7 @@ type Deal = {
   leftRole: Role;
   rightRole: Role;
   choice: "left" | "right" | "none" | null;
+  pull: Pull | null;
 };
 
 type Meta = {
@@ -273,7 +277,7 @@ function metaFrom(value: unknown): Meta {
     deals,
     spread: Number.isFinite(Number(raw.spread)) ? Number(raw.spread) : 0.34,
     net: Number.isFinite(Number(raw.net)) ? Number(raw.net) : 0.22,
-    lastPull: pull === "tight" || pull === "bolt" || pull === "miss" ? pull : "idle",
+    lastPull: pull === "tight" || pull === "bolt" || pull === "miss" || pull === "skip" ? pull : "idle",
     pulls: Number.isFinite(Number(raw.pulls)) ? Number(raw.pulls) : 0,
     guessId: typeof raw.guessId === "string" ? raw.guessId : null,
     // null means the clock is running. 0 is a real pause at the last moment — Number(null) is 0, so don't coerce.
@@ -288,6 +292,7 @@ function dealFrom(value: unknown): Deal | null {
   if (!leftRole || !rightRole) return null;
   if (typeof raw.leftText !== "string" || typeof raw.rightText !== "string") return null;
   const choice = raw.choice;
+  const marked = raw.pull;
   return {
     leftText: raw.leftText,
     rightText: raw.rightText,
@@ -296,6 +301,7 @@ function dealFrom(value: unknown): Deal | null {
     leftRole,
     rightRole,
     choice: choice === "left" || choice === "right" || choice === "none" ? choice : null,
+    pull: marked === "tight" || marked === "bolt" || marked === "miss" || marked === "skip" ? marked : null,
   };
 }
 
@@ -465,6 +471,33 @@ async function openRound(
   return updated.length > 0;
 }
 
+function takeTurns<T extends { player_id: string }>(rows: T[], limit: number): T[] {
+  const buckets = new Map<string, T[]>();
+  const order: string[] = [];
+  for (const row of rows) {
+    const bucket = buckets.get(row.player_id);
+    if (bucket) bucket.push(row);
+    else {
+      buckets.set(row.player_id, [row]);
+      order.push(row.player_id);
+    }
+  }
+  const picked: T[] = [];
+  while (picked.length < limit) {
+    let added = false;
+    for (const id of order) {
+      const bucket = buckets.get(id);
+      const next = bucket?.shift();
+      if (!next) continue;
+      picked.push(next);
+      added = true;
+      if (picked.length >= limit) break;
+    }
+    if (!added) break;
+  }
+  return picked;
+}
+
 async function closeClue(sql: Sql, room: RoomRow): Promise<boolean> {
   if (!room.secret_id) return false;
   const meta = metaFrom(room.meta);
@@ -477,11 +510,17 @@ async function closeClue(sql: Sql, room: RoomRow): Promise<boolean> {
   `;
   const fisheries = fisheriesOf(room.half, meta);
   const teamOf = new Map(players.map((player) => [player.id, player.team]));
-  const fishLines = prompts.filter((row) => teamOf.get(row.player_id) === fisheries);
-  const schoolLines = prompts.filter((row) => teamOf.get(row.player_id) === otherSide(fisheries));
-  // Every crew line gets a deal. A school that comes up short gets house decoys,
-  // so holding back casts can never erase the skipper's deals.
-  const count = Math.min(MAX_DEALS, fishLines.length);
+  const fishLines = takeTurns(
+    prompts.filter((row) => teamOf.get(row.player_id) === fisheries),
+    MAX_DEALS,
+  );
+  const schoolLines = takeTurns(
+    prompts.filter((row) => teamOf.get(row.player_id) === otherSide(fisheries)),
+    MAX_DEALS,
+  );
+  // Every crew line gets a deal, up to five, taken round-robin so one fast
+  // typist can't fill the boat. A short school gets house decoys.
+  const count = fishLines.length;
   const taken = new Set(prompts.map((row) => row.body.trim().toLowerCase()));
   const deals: Deal[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -499,6 +538,7 @@ async function closeClue(sql: Sql, room: RoomRow): Promise<boolean> {
             leftRole: "fisheries",
             rightRole: "school",
             choice: null,
+            pull: null,
           }
         : {
             leftText: school.body,
@@ -508,6 +548,7 @@ async function closeClue(sql: Sql, room: RoomRow): Promise<boolean> {
             leftRole: "school",
             rightRole: "fisheries",
             choice: null,
+            pull: null,
           },
     );
   }
@@ -540,7 +581,7 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
   if (!current || current.choice != null) return false;
   let scores = scoresFrom(room.scores);
   const memory = memoryFrom(room.memory);
-  let pull: Pull = "miss";
+  let pull: Pull = "skip";
   if (choice) {
     const text = choice === "left" ? current.leftText : current.rightText;
     // The board takes the tapped line as written. Only the reading knows whether it was true.
@@ -551,6 +592,7 @@ async function resolveDeal(sql: Sql, room: RoomRow, choice: "left" | "right" | n
   } else {
     current.choice = "none";
   }
+  current.pull = pull;
   const deals = meta.deals.map((deal, index) => (index === meta.deal ? current : deal));
   let net = meta.net;
   if (pull === "tight") net = Math.min(1, net + 0.22);
@@ -627,15 +669,17 @@ async function finishName(sql: Sql, room: RoomRow, guessId: string | null): Prom
   const stored = word?.id ?? null;
   const meta = { ...metaFrom(room.meta), guessId: stored, holdMs: null };
   const deadline = Date.now() + REVEAL_MS;
-  const updated = await sql<{ version: number }>`
-    update sway_rooms
-    set status = 'reveal', deadline = ${deadline}, meta = ${json(meta)}::jsonb, version = version + 1
-    where code = ${room.code} and version = ${room.version} and status = 'name'
-    returning version
-  `;
-  if (updated.length === 0) return false;
-  await writeResult(sql, room, stored);
-  return true;
+  return sql.transaction(async (tx) => {
+    const updated = await tx<{ version: number }>`
+      update sway_rooms
+      set status = 'reveal', deadline = ${deadline}, meta = ${json(meta)}::jsonb, version = version + 1
+      where code = ${room.code} and version = ${room.version} and status = 'name'
+      returning version
+    `;
+    if (updated.length === 0) return false;
+    await writeResult(tx, room, stored);
+    return true;
+  });
 }
 
 async function openClue(sql: Sql, room: RoomRow): Promise<boolean> {
@@ -661,21 +705,17 @@ async function slipRound(sql: Sql, room: RoomRow): Promise<boolean> {
   }
   const meta = { ...metaFrom(room.meta), guessId: null, holdMs: null, lastPull: "miss" as Pull };
   const deadline = Date.now() + REVEAL_MS;
-  const updated = await sql<{ version: number }>`
-    update sway_rooms
-    set status = 'reveal', deadline = ${deadline}, meta = ${json(meta)}::jsonb, version = version + 1
-    where code = ${room.code} and version = ${room.version} and status = ${room.status}
-    returning version
-  `;
-  if (updated.length === 0) return false;
-  await writeResult(sql, room, null);
-  return true;
-}
-
-async function ensureResult(sql: Sql, room: RoomRow) {
-  if (!room.secret_id) return;
-  const meta = metaFrom(room.meta);
-  await writeResult(sql, room, meta.guessId);
+  return sql.transaction(async (tx) => {
+    const updated = await tx<{ version: number }>`
+      update sway_rooms
+      set status = 'reveal', deadline = ${deadline}, meta = ${json(meta)}::jsonb, version = version + 1
+      where code = ${room.code} and version = ${room.version} and status = ${room.status}
+      returning version
+    `;
+    if (updated.length === 0) return false;
+    await writeResult(tx, room, null);
+    return true;
+  });
 }
 
 async function expireIfNeeded(sql: Sql, code: string): Promise<void> {
@@ -745,7 +785,6 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
   await expireIfNeeded(sql, code);
   const room = await loadRoom(sql, code);
   if (!room) return { ok: false, error: "No room with that code." };
-  if (room.status === "reveal") await ensureResult(sql, room);
   const meta = metaFrom(room.meta);
   const used = asNumMap(room.used);
   const players = playersOf(await loadPlayers(sql, code), used);
@@ -778,12 +817,27 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
     order by id asc
     limit 120
   `;
+  const dealt = new Set<string>();
+  for (const row of meta.deals) {
+    if (row.leftPlayer) dealt.add(`${row.leftPlayer}\n${row.leftText}`);
+    if (row.rightPlayer) dealt.add(`${row.rightPlayer}\n${row.rightText}`);
+  }
+  const showFate = room.status === "deal" || room.status === "name" || room.status === "reveal" || room.status === "match";
   const clues =
     you == null
       ? []
       : prompts
           .filter((row) => row.player_id === you.id)
-          .map((row) => ({ text: row.body, dead: Boolean(row.shrug) }));
+          .map((row) => ({
+            text: row.body,
+            dead: Boolean(row.shrug),
+            fate:
+              !showFate || row.shrug
+                ? null
+                : dealt.has(`${row.player_id}\n${row.body}`)
+                  ? ("dealt" as const)
+                  : ("benched" as const),
+          }));
   const boat = { fisheries: 0, school: 0 };
   if (fisheries) {
     const teamOf = new Map(players.map((player) => [player.id, player.team]));
@@ -830,6 +884,16 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
   )
     ? (room.status as RoomStatus)
     : "lobby";
+  const notes: RoomNote[] =
+    youAre === "skipper" && (status === "deal" || status === "name")
+      ? meta.deals.flatMap((row): RoomNote[] => {
+          if (row.choice == null) return [];
+          if (row.choice === "none" || row.pull === "skip") return [{ text: "No tap", pull: "skip" }];
+          const text = row.choice === "left" ? row.leftText : row.rightText;
+          const pull = row.pull === "tight" || row.pull === "bolt" || row.pull === "miss" ? row.pull : "miss";
+          return [{ text, pull }];
+        })
+      : [];
   return {
     ok: true,
     room: {
@@ -860,6 +924,7 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       clockMs: clockFor(status),
       holdMs: status === "reveal" ? meta.holdMs : null,
       clues,
+      notes,
       slotsLeft: Math.max(0, CLUES_PER - (you?.used ?? 0)),
       boat,
       spread,
@@ -870,6 +935,7 @@ async function viewOf(sql: Sql, code: string, playerId: string): Promise<RoomRes
       result: status === "reveal" ? currentResult : null,
       results: status === "match" ? mapped : [],
       tally,
+      serverNow: Date.now(),
     },
   };
 }
@@ -880,10 +946,10 @@ const seatInput = z.object({
   team: teamSchema,
 });
 
-export const createRoomFn = createServerFn({ method: "POST" })
-  .validator(seatInput)
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+
+
+async function workCreate(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const handle = cleanHandle(data.handle, "");
     if (!handle) return { ok: false, error: "Add a name so your team can see you." };
     await dropSeat(sql, await seatKey(data.playerId));
@@ -901,12 +967,11 @@ export const createRoomFn = createServerFn({ method: "POST" })
       values (${await seatKey(data.playerId)}, ${code}, ${handle}, ${data.team})
     `;
     return viewOf(sql, code, await seatKey(data.playerId));
-  });
+  
+}
 
-export const joinRoomFn = createServerFn({ method: "POST" })
-  .validator(seatInput.extend({ code: codeSchema }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workJoin(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     const handle = cleanHandle(data.handle, "");
     if (!handle) return { ok: false, error: "Add a name so your team can see you." };
@@ -934,19 +999,17 @@ export const joinRoomFn = createServerFn({ method: "POST" })
     `;
     await sql`update sway_rooms set version = version + 1 where code = ${code}`;
     return viewOf(sql, code, await seatKey(data.playerId));
-  });
+  
+}
 
-export const syncRoomFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workSync(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     return viewOf(sql, data.code.toUpperCase(), await seatKey(data.playerId));
-  });
+  
+}
 
-export const chooseTeamFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema, team: teamSchema }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workChooseTeam(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     const room = await loadRoom(sql, code);
     if (!room) return { ok: false, error: "No room with that code." };
@@ -959,20 +1022,11 @@ export const chooseTeamFn = createServerFn({ method: "POST" })
     if (updated.length === 0) return { ok: false, error: "You're not in this room." };
     await sql`update sway_rooms set version = version + 1 where code = ${code} and status = 'lobby'`;
     return viewOf(sql, code, await seatKey(data.playerId));
-  });
+  
+}
 
-export const setLobbyFn = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      code: codeSchema,
-      playerId: seatSchema,
-      cycles: z.number().int().min(1).max(3).optional(),
-      amberName: z.string().max(24).optional(),
-      tideName: z.string().max(24).optional(),
-    }),
-  )
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workSetLobby(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     const room = await loadRoom(sql, code);
     if (!room) return { ok: false, error: "No room with that code." };
@@ -990,12 +1044,11 @@ export const setLobbyFn = createServerFn({ method: "POST" })
       where code = ${code} and status = 'lobby'
     `;
     return viewOf(sql, code, await seatKey(data.playerId));
-  });
+  
+}
 
-export const startRoomFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workStart(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     const room = await loadRoom(sql, code);
     if (!room) return { ok: false, error: "No room with that code." };
@@ -1011,12 +1064,11 @@ export const startRoomFn = createServerFn({ method: "POST" })
     const opened = await openRound(sql, room, 1, 0, emptyMeta(first), "lobby");
     if (!opened) return viewOf(sql, code, await seatKey(data.playerId));
     return viewOf(sql, code, await seatKey(data.playerId));
-  });
+  
+}
 
-export const castNetFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workCast(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const room = await loadRoom(sql, code);
@@ -1027,12 +1079,11 @@ export const castNetFn = createServerFn({ method: "POST" })
       if (await openClue(sql, room)) return viewOf(sql, code, await seatKey(data.playerId));
     }
     return viewOf(sql, code, await seatKey(data.playerId));
-  });
+  
+}
 
-export const feedClueFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema, text: z.string().max(120) }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workFeed(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     const text = data.text.trim().slice(0, 80);
     if (!text) return { ok: false, error: "Type a cast first." };
@@ -1053,7 +1104,17 @@ export const feedClueFn = createServerFn({ method: "POST" })
       const fisheries = fisheriesOf(room.half, meta);
       const standIn = you.team === fisheries ? meta.fisheriesStandIn : meta.schoolStandIn;
       if (blockedName(text, room.secret_id, standIn)) {
-        return { ok: false, error: "Rejected — don't name a word that close." };
+        const nextUsed = { ...used, [you.id]: (used[you.id] ?? 0) + 1 };
+        const spent = await sql<{ version: number }>`
+          update sway_rooms
+          set used = ${json(nextUsed)}::jsonb, version = version + 1
+          where code = ${code} and version = ${room.version} and status = 'clue'
+          returning version
+        `;
+        if (spent.length === 0) continue;
+        const view = await viewOf(sql, code, me);
+        if (!view.ok) return view;
+        return { ok: false, error: "Thrown back. That still costs a cast.", room: view.room };
       }
       const prior = await sql<{ body: string }>`
         select body from sway_prompts
@@ -1066,26 +1127,27 @@ export const feedClueFn = createServerFn({ method: "POST" })
       if (!normalized) return { ok: false, error: "Type a word the water knows, or a trait." };
       const dead = !promptLands(text);
       const nextUsed = { ...used, [you.id]: (used[you.id] ?? 0) + 1 };
-      const updated = await sql<{ version: number }>`
-        update sway_rooms
-        set used = ${json(nextUsed)}::jsonb, version = version + 1
-        where code = ${code} and version = ${room.version} and status = 'clue'
-        returning version
-      `;
-      if (updated.length === 0) continue;
-      await sql`
+      // One statement, so the deal can't close between the count and the line.
+      const written = await sql<{ room_code: string }>`
+        with bump as (
+          update sway_rooms
+          set used = ${json(nextUsed)}::jsonb, version = version + 1
+          where code = ${code} and version = ${room.version} and status = 'clue'
+          returning code, cycle, half
+        )
         insert into sway_prompts (room_code, cycle, half, player_id, body, shrug, resisted, rank)
-        values (${code}, ${room.cycle}, ${room.half}, ${you.id}, ${text}, ${dead}, false, 0)
+        select code, cycle, half, ${you.id}, ${text}, ${dead}, false, 0 from bump
+        returning room_code
       `;
-      return viewOf(sql, code, await seatKey(data.playerId));
+      if (written.length === 0) continue;
+      return viewOf(sql, code, me);
     }
     return { ok: false, error: "The room was busy. Cast again." };
-  });
+  
+}
 
-export const chooseDealFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema, choice: z.enum(["left", "right"]) }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workChoose(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     let target: number | null = null;
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -1101,12 +1163,11 @@ export const chooseDealFn = createServerFn({ method: "POST" })
       if (await resolveDeal(sql, room, data.choice)) return viewOf(sql, code, await seatKey(data.playerId));
     }
     return { ok: false, error: "That deal already moved. Watch the water." };
-  });
+  
+}
 
-export const nameWordFn = createServerFn({ method: "POST" })
-  .validator(z.object({ code: codeSchema, playerId: seatSchema, wordId: z.string().min(1).max(64) }))
-  .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
+async function workName(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
     const code = data.code.toUpperCase();
     const word = findWord(data.wordId);
     if (!word) return { ok: false, error: "That word isn't in the bank." };
@@ -1121,6 +1182,216 @@ export const nameWordFn = createServerFn({ method: "POST" })
       if (await finishName(sql, room, word.id)) return viewOf(sql, code, await seatKey(data.playerId));
     }
     return viewOf(sql, code, await seatKey(data.playerId));
+  
+}
+
+async function workAdvance(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
+    const code = data.code.toUpperCase();
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const room = await loadRoom(sql, code);
+      if (!room) return { ok: false, error: "No room with that code." };
+      if (room.status !== "reveal") return viewOf(sql, code, await seatKey(data.playerId));
+      const seated = await sql<{ id: string }>`
+        select id from sway_players where id = ${await seatKey(data.playerId)} and room_code = ${code}
+      `;
+      if (seated.length === 0) return { ok: false, error: "You're not in this room." };
+      const meta = metaFrom(room.meta);
+      if (meta.holdMs != null) return { ok: false, error: "Resume the haul before the next cast." };
+      if (room.deadline != null && Date.now() < Number(room.deadline) - 400) {
+        return { ok: false, error: "The water is still moving." };
+      }
+      if (await advanceReveal(sql, room)) return viewOf(sql, code, await seatKey(data.playerId));
+    }
+    return viewOf(sql, code, await seatKey(data.playerId));
+  
+}
+
+async function workHold(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
+    const code = data.code.toUpperCase();
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const room = await loadRoom(sql, code);
+      if (!room) return { ok: false, error: "No room with that code." };
+      if (room.status !== "reveal") return viewOf(sql, code, await seatKey(data.playerId));
+      const seated = await sql<{ id: string }>`
+        select id from sway_players where id = ${await seatKey(data.playerId)} and room_code = ${code}
+      `;
+      if (seated.length === 0) return { ok: false, error: "You're not in this room." };
+      const meta = metaFrom(room.meta);
+      const paused = meta.holdMs != null;
+      const remain = paused
+        ? meta.holdMs
+        : room.deadline != null
+          ? Math.max(0, Number(room.deadline) - Date.now())
+          : REVEAL_MS;
+      const next = { ...meta, holdMs: paused ? null : remain };
+      const deadline = paused ? Date.now() + (remain ?? 0) : null;
+      const updated = await sql<{ version: number }>`
+        update sway_rooms
+        set deadline = ${deadline}, meta = ${json(next)}::jsonb, version = version + 1
+        where code = ${code} and version = ${room.version} and status = 'reveal'
+        returning version
+      `;
+      if (updated.length > 0) return viewOf(sql, code, await seatKey(data.playerId));
+    }
+    return viewOf(sql, code, await seatKey(data.playerId));
+  
+}
+
+async function workRematch(data: { [key: string]: any }): Promise<RoomResponse> {
+const sql = await getSql();
+    const code = data.code.toUpperCase();
+    const room = await loadRoom(sql, code);
+    if (!room) return { ok: false, error: "No room with that code." };
+    if (room.status !== "match") return viewOf(sql, code, await seatKey(data.playerId));
+    const seated = await sql<{ id: string }>`
+      select id from sway_players where id = ${await seatKey(data.playerId)} and room_code = ${code}
+    `;
+    if (seated.length === 0) return { ok: false, error: "You're not in this room." };
+    await sql`delete from sway_prompts where room_code = ${code}`;
+    await sql`delete from sway_results where room_code = ${code}`;
+    await sql`
+      update sway_rooms
+      set status = 'lobby', cycle = 1, half = 0, secret_id = null,
+          scores = '{}'::jsonb, memory = '{}'::jsonb, used = '{}'::jsonb,
+          deadline = null, meta = '{}'::jsonb, version = version + 1
+      where code = ${code}
+    `;
+    return viewOf(sql, code, await seatKey(data.playerId));
+  
+}
+
+async function workLeave(data: { [key: string]: any }): Promise<{ ok: true }> {
+const sql = await getSql();
+    await dropSeat(sql, await seatKey(data.playerId), data.code.toUpperCase());
+    return { ok: true };
+  
+}
+
+export async function runOp(op: string, data: unknown): Promise<unknown> {
+  switch (op) {
+    case 'create': return workCreate(data as { [key: string]: any });
+    case 'join': return workJoin(data as { [key: string]: any });
+    case 'sync': return workSync(data as { [key: string]: any });
+    case 'chooseTeam': return workChooseTeam(data as { [key: string]: any });
+    case 'setLobby': return workSetLobby(data as { [key: string]: any });
+    case 'start': return workStart(data as { [key: string]: any });
+    case 'cast': return workCast(data as { [key: string]: any });
+    case 'feed': return workFeed(data as { [key: string]: any });
+    case 'choose': return workChoose(data as { [key: string]: any });
+    case 'name': return workName(data as { [key: string]: any });
+    case 'advance': return workAdvance(data as { [key: string]: any });
+    case 'hold': return workHold(data as { [key: string]: any });
+    case 'rematch': return workRematch(data as { [key: string]: any });
+    case 'leave': return workLeave(data as { [key: string]: any });
+    default: return { ok: false, error: "Unknown room action." };
+  }
+}
+
+export async function touchRoom(code: string): Promise<void> {
+  const sql = await getSql();
+  await expireIfNeeded(sql, code);
+}
+
+export async function playerView(code: string, playerId: string): Promise<RoomResponse> {
+  const sql = await getSql();
+  return viewOf(sql, code, playerId);
+}
+async function forwardRoom(op: string, data: unknown): Promise<unknown | undefined> {
+  if (hasBoundSql()) return undefined;
+  const { roomBinding } = await import("./room-host");
+  const rooms = await roomBinding();
+  if (!rooms) return undefined;
+  return rooms.get(rooms.idFromName("sway")).play(op, data);
+}
+
+export const createRoomFn = createServerFn({ method: "POST" })
+  .validator(seatInput)
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('create', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workCreate(data);
+  });
+
+export const joinRoomFn = createServerFn({ method: "POST" })
+  .validator(seatInput.extend({ code: codeSchema }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('join', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workJoin(data);
+  });
+
+export const syncRoomFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('sync', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workSync(data);
+  });
+
+export const chooseTeamFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema, team: teamSchema }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('chooseTeam', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workChooseTeam(data);
+  });
+
+export const setLobbyFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      code: codeSchema,
+      playerId: seatSchema,
+      cycles: z.number().int().min(1).max(3).optional(),
+      amberName: z.string().max(24).optional(),
+      tideName: z.string().max(24).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('setLobby', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workSetLobby(data);
+  });
+
+export const startRoomFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('start', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workStart(data);
+  });
+
+export const castNetFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('cast', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workCast(data);
+  });
+
+export const feedClueFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema, text: z.string().max(120) }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('feed', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workFeed(data);
+  });
+
+export const chooseDealFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema, choice: z.enum(["left", "right"]) }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('choose', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workChoose(data);
+  });
+
+export const nameWordFn = createServerFn({ method: "POST" })
+  .validator(z.object({ code: codeSchema, playerId: seatSchema, wordId: z.string().min(1).max(64) }))
+  .handler(async ({ data }): Promise<RoomResponse> => {
+    const forwarded = await forwardRoom('name', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workName(data);
   });
 
 async function advanceReveal(sql: Sql, room: RoomRow): Promise<boolean> {
@@ -1151,87 +1422,31 @@ async function advanceReveal(sql: Sql, room: RoomRow): Promise<boolean> {
 export const advanceRoomFn = createServerFn({ method: "POST" })
   .validator(z.object({ code: codeSchema, playerId: seatSchema }))
   .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
-    const code = data.code.toUpperCase();
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const room = await loadRoom(sql, code);
-      if (!room) return { ok: false, error: "No room with that code." };
-      if (room.status !== "reveal") return viewOf(sql, code, await seatKey(data.playerId));
-      const seated = await sql<{ id: string }>`
-        select id from sway_players where id = ${await seatKey(data.playerId)} and room_code = ${code}
-      `;
-      if (seated.length === 0) return { ok: false, error: "You're not in this room." };
-      const meta = metaFrom(room.meta);
-      if (meta.holdMs != null) return { ok: false, error: "Resume the haul before the next cast." };
-      if (room.deadline != null && Date.now() < Number(room.deadline) - 400) {
-        return { ok: false, error: "The water is still moving." };
-      }
-      if (await advanceReveal(sql, room)) return viewOf(sql, code, await seatKey(data.playerId));
-    }
-    return viewOf(sql, code, await seatKey(data.playerId));
+    const forwarded = await forwardRoom('advance', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workAdvance(data);
   });
 
 export const holdRevealFn = createServerFn({ method: "POST" })
   .validator(z.object({ code: codeSchema, playerId: seatSchema }))
   .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
-    const code = data.code.toUpperCase();
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const room = await loadRoom(sql, code);
-      if (!room) return { ok: false, error: "No room with that code." };
-      if (room.status !== "reveal") return viewOf(sql, code, await seatKey(data.playerId));
-      const seated = await sql<{ id: string }>`
-        select id from sway_players where id = ${await seatKey(data.playerId)} and room_code = ${code}
-      `;
-      if (seated.length === 0) return { ok: false, error: "You're not in this room." };
-      const meta = metaFrom(room.meta);
-      const paused = meta.holdMs != null;
-      const remain = paused
-        ? meta.holdMs
-        : room.deadline != null
-          ? Math.max(0, Number(room.deadline) - Date.now())
-          : REVEAL_MS;
-      const next = { ...meta, holdMs: paused ? null : remain };
-      const deadline = paused ? Date.now() + (remain ?? 0) : null;
-      const updated = await sql<{ version: number }>`
-        update sway_rooms
-        set deadline = ${deadline}, meta = ${json(next)}::jsonb, version = version + 1
-        where code = ${code} and version = ${room.version} and status = 'reveal'
-        returning version
-      `;
-      if (updated.length > 0) return viewOf(sql, code, await seatKey(data.playerId));
-    }
-    return viewOf(sql, code, await seatKey(data.playerId));
+    const forwarded = await forwardRoom('hold', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workHold(data);
   });
 
 export const rematchRoomFn = createServerFn({ method: "POST" })
   .validator(z.object({ code: codeSchema, playerId: seatSchema }))
   .handler(async ({ data }): Promise<RoomResponse> => {
-    const sql = await getSql();
-    const code = data.code.toUpperCase();
-    const room = await loadRoom(sql, code);
-    if (!room) return { ok: false, error: "No room with that code." };
-    if (room.status !== "match") return viewOf(sql, code, await seatKey(data.playerId));
-    const seated = await sql<{ id: string }>`
-      select id from sway_players where id = ${await seatKey(data.playerId)} and room_code = ${code}
-    `;
-    if (seated.length === 0) return { ok: false, error: "You're not in this room." };
-    await sql`delete from sway_prompts where room_code = ${code}`;
-    await sql`delete from sway_results where room_code = ${code}`;
-    await sql`
-      update sway_rooms
-      set status = 'lobby', cycle = 1, half = 0, secret_id = null,
-          scores = '{}'::jsonb, memory = '{}'::jsonb, used = '{}'::jsonb,
-          deadline = null, meta = '{}'::jsonb, version = version + 1
-      where code = ${code}
-    `;
-    return viewOf(sql, code, await seatKey(data.playerId));
+    const forwarded = await forwardRoom('rematch', data);
+    if (forwarded !== undefined) return forwarded as RoomResponse;
+    return workRematch(data);
   });
 
 export const leaveRoomFn = createServerFn({ method: "POST" })
   .validator(z.object({ code: codeSchema, playerId: seatSchema }))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const sql = await getSql();
-    await dropSeat(sql, await seatKey(data.playerId), data.code.toUpperCase());
-    return { ok: true };
+    const forwarded = await forwardRoom('leave', data);
+    if (forwarded !== undefined) return forwarded as { ok: true };
+    return workLeave(data);
   });

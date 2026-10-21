@@ -35,6 +35,8 @@ export interface Sql {
     text: string,
     params?: unknown[],
   ): Promise<T[]>;
+  /** Run `fn` on one connection so a bump and an insert can't land apart. */
+  transaction<T>(fn: (sql: Sql) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -82,6 +84,8 @@ function toSql(run: Run): Sql {
   }) as unknown as Sql;
   sql.query = <T = Record<string, unknown>>(text: string, params: unknown[] = []) =>
     run<T>(text, params);
+  // Backends that can actually commit replace this. The default just calls through.
+  sql.transaction = (fn) => fn(sql);
   return sql;
 }
 
@@ -94,10 +98,29 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
-    return toSql(async <T>(text: string, params: unknown[]) => {
+    const base = toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
     });
+    base.transaction = async (fn) => {
+      const client = await pool.connect();
+      const tx = toSql(async <T>(text: string, params: unknown[]) => {
+        const res = await client.query(text, params);
+        return res.rows as T[];
+      });
+      try {
+        await client.query("begin");
+        const result = await fn(tx);
+        await client.query("commit");
+        return result;
+      } catch (err) {
+        await client.query("rollback");
+        throw err;
+      } finally {
+        client.release();
+      }
+    };
+    return base;
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
     throw err;
@@ -161,10 +184,46 @@ async function createPgliteSql(): Promise<Sql> {
   globalRef.__pgliteMigrateChain__ = pass;
   await pass;
 
-  return toSql(async <T>(text: string, params: unknown[]) => {
+  const sql = toSql(async <T>(text: string, params: unknown[]) => {
     const result = await pg.query<T>(text, params);
     return result.rows;
   });
+  sql.transaction = (fn) =>
+    pg.transaction(async (tx) => {
+      const inner = toSql(async <T>(text: string, params: unknown[]) => {
+        const result = await tx.query<T>(text, params);
+        return result.rows;
+      });
+      return fn(inner);
+    });
+  return sql;
+}
+
+type SqlScope = {
+  getStore(): Sql | undefined;
+  run<T>(sql: Sql, fn: () => Promise<T>): Promise<T>;
+};
+
+const holders = globalThis as typeof globalThis & { __swaySqlScope?: SqlScope };
+
+/** Called from the Durable Object module, which the browser never loads. */
+export function installSqlScope(scope: SqlScope) {
+  holders.__swaySqlScope = scope;
+}
+
+/** Run `fn` against a specific client. The Durable Object uses this for its own log. */
+export function bindSql<T>(sql: Sql, fn: () => Promise<T>): Promise<T> {
+  const scope = holders.__swaySqlScope;
+  if (!scope) return fn();
+  return scope.run(sql, fn);
+}
+
+export function hasBoundSql(): boolean {
+  return Boolean(holders.__swaySqlScope?.getStore());
+}
+
+function workerRuntime(): boolean {
+  return typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
 }
 
 let sqlPromise: Promise<Sql> | null = null;
@@ -187,6 +246,11 @@ async function createSql(): Promise<Sql> {
  * both backends — define tables there, never inline in server functions.
  */
 export function getSql(): Promise<Sql> {
+  const bound = holders.__swaySqlScope?.getStore();
+  if (bound) return Promise.resolve(bound);
+  if (workerRuntime()) {
+    return Promise.reject(new Error("Room storage is not ready."));
+  }
   sqlPromise ??= createSql().catch((err) => {
     sqlPromise = null; // don't memoize failures — let the next call retry
     throw err;
@@ -229,7 +293,7 @@ export function ensureDbReady(): Promise<void> {
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
+if (typeof window === "undefined" && dbSource === "pglite" && !workerRuntime()) {
   globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
     globalBoot.__pgBootstrapPromise__ = undefined;
     console.error("[db] PGLite bootstrap failed:", err);

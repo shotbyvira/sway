@@ -125,6 +125,8 @@ export function RoomPlay({
   const [tideDraft, setTideDraft] = useState("Tide");
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
+  const skewRef = useRef(0);
+  const socketRef = useRef(false);
 
   codeRef.current = room?.code ?? codeRef.current;
 
@@ -137,6 +139,7 @@ export function RoomPlay({
   }, []);
 
   function take(next: RoomView) {
+    skewRef.current = next.serverNow - Date.now();
     codeRef.current = next.code;
     rememberRoom(next.code);
     setRoom((prev) => {
@@ -149,6 +152,7 @@ export function RoomPlay({
   function apply(res: RoomResponse) {
     if (!res.ok) {
       setError(res.error);
+      if (res.room) take(res.room);
       if (res.error.includes("No room")) {
         rememberRoom(null);
         codeRef.current = null;
@@ -203,13 +207,17 @@ export function RoomPlay({
 
   useEffect(() => {
     if (!room) return;
-    const timer = setInterval(() => {
-      const code = room.code;
-      const playerId = playerIdRef.current;
+    const code = room.code;
+    const playerId = playerIdRef.current;
+    let stopped = false;
+    let poll: ReturnType<typeof setInterval> | null = null;
+    let socket: WebSocket | null = null;
+    const pull = () => {
       if (!code || !playerId) return;
       void syncRef
         .current({ data: { code, playerId } })
         .then((res) => {
+          if (stopped) return;
           if (!res.ok) {
             if (res.error.includes("No room")) {
               rememberRoom(null);
@@ -229,8 +237,55 @@ export function RoomPlay({
           take(res.room);
         })
         .catch(() => undefined);
-    }, 1000);
-    return () => clearInterval(timer);
+    };
+    const startPoll = () => {
+      if (poll || socketRef.current) return;
+      poll = setInterval(pull, 1000);
+    };
+    const stopPoll = () => {
+      if (poll) clearInterval(poll);
+      poll = null;
+    };
+    startPoll();
+    const host = window.location.hostname;
+    const liveSocket = host.endsWith("vireshwardas.com") || host.endsWith("workers.dev");
+    if (liveSocket) {
+      try {
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        socket = new WebSocket(
+          `${proto}//${window.location.host}/api/sway-ws?code=${code}&seat=${encodeURIComponent(playerId)}`,
+        );
+        socket.onopen = () => {
+          socketRef.current = true;
+          stopPoll();
+        };
+        socket.onmessage = (event) => {
+          if (stopped) return;
+          try {
+            const body = JSON.parse(String(event.data)) as RoomResponse;
+            if (!body.ok) return;
+            if (!body.room.you) return;
+            take(body.room);
+          } catch {
+            /* ignore a bad frame */
+          }
+        };
+        socket.onclose = () => {
+          socketRef.current = false;
+          if (!stopped) startPoll();
+        };
+      } catch {
+        socketRef.current = false;
+      }
+    }
+    return () => {
+      stopped = true;
+      stopPoll();
+      socketRef.current = false;
+      socket?.close();
+    };
+    // take reads the latest setters. Reconnect only when the room code changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.code]);
 
   useEffect(() => {
@@ -245,7 +300,7 @@ export function RoomPlay({
     let frame = 0;
     let last = -1;
     const loop = () => {
-      const remain = Math.max(0, (room.deadline ?? 0) - Date.now());
+      const remain = Math.max(0, (room.deadline ?? 0) - (Date.now() + skewRef.current));
       const shown = Math.ceil(remain / 1000);
       if (shown !== last) {
         last = shown;
@@ -339,7 +394,7 @@ export function RoomPlay({
       ? revealHeld != null
         ? revealHeld
         : room.deadline != null
-          ? Math.max(0, room.deadline - Date.now())
+          ? Math.max(0, room.deadline - (Date.now() + skewRef.current))
           : 0
       : 0;
   useSea({
@@ -352,6 +407,9 @@ export function RoomPlay({
     finaleT: null,
     paused: revealHeld != null,
     beat: room?.pulls ?? 0,
+    revealDeadline: room?.status === "reveal" && revealHeld == null ? room.deadline : null,
+    revealHold: room?.status === "reveal" ? revealHeld : null,
+    clockSkew: skewRef.current,
   });
 
   if (!room) {
@@ -419,7 +477,7 @@ export function RoomPlay({
   }
 
   const note = splitNote(room.players);
-  const leftMs = room.holdMs != null ? room.holdMs : room.deadline != null ? Math.max(0, room.deadline - Date.now()) : 0;
+  const leftMs = room.holdMs != null ? room.holdMs : room.deadline != null ? Math.max(0, room.deadline - (Date.now() + skewRef.current)) : 0;
   void tick;
   const skipper = room.players.find((player) => player.id === room.skipperId);
   const fishName = room.fisheries ? sideLabel(room.fisheries, room) : "";
@@ -710,7 +768,8 @@ function CluePanel({
     <div className="mt-4">
       <p className="text-sm text-muted">
         Accepted in the boat: {room.fisheries ? sideLabel(room.fisheries, room) : "Fisheries"} {room.boat.fisheries} ·{" "}
-        {room.school ? sideLabel(room.school, room) : "School"} {room.boat.school}. First five from each side are dealt.
+        {room.school ? sideLabel(room.school, room) : "School"} {room.boat.school}. Lines go in round-robin, five a side.
+        The rest sit on the bench.
       </p>
       {room.youAre === "skipper" && (
         <p className="mt-3 text-sm leading-relaxed text-muted">Your crew is casting. You don't see the lines, and you don't know the fish.</p>
@@ -719,7 +778,7 @@ function CluePanel({
         <p className="mt-3 text-sm leading-relaxed text-muted">
           Blur: <span className="text-fg">{room.standIn}</span>.{" "}
           {room.youAre === "school" ? "Pull the fish away from the net." : "Pull the net onto the fish."} Three casts. A
-          rejection doesn't spend one. Dead water does.
+          thrown-back name still spends a cast. Dead water does too.
         </p>
       )}
       {crew && room.slotsLeft > 0 && (
@@ -749,7 +808,9 @@ function CluePanel({
           {room.clues.map((clue, i) => (
             <li key={i} className={"px-say flex items-baseline justify-between gap-3 px-3 py-2 text-sm " + (clue.dead ? "is-bad" : "is-ok")}>
               <span className="text-fg">{clue.text}</span>
-              <span className={clue.dead ? "text-warn" : "text-tide"}>{clue.dead ? "Dead water" : "Accepted"}</span>
+              <span className={clue.dead || clue.fate === "benched" ? "text-warn" : "text-tide"}>
+                {clue.dead ? "Dead water" : clue.fate === "dealt" ? "Dealt" : clue.fate === "benched" ? "Benched" : "Accepted"}
+              </span>
             </li>
           ))}
         </ul>
@@ -797,6 +858,7 @@ function DealPanel({
         )}
       </div>
       {room.youAre !== "skipper" && <p className="mt-3 text-sm text-muted">Only the skipper can tap. Watch the school.</p>}
+      <Notebook notes={room.notes} />
     </div>
   );
 }
@@ -821,7 +883,8 @@ function NamePanel({
   }
   return (
     <div className="mt-4">
-      <p className="text-sm text-muted">Fifteen seconds. The top of the net, or search the bank.</p>
+      <p className="text-sm text-muted">Fifteen seconds. The top of the net, or search the bank. The notebook keeps every tap.</p>
+      <Notebook notes={room.notes} />
       <div className="mt-3 flex flex-wrap gap-2">
         {room.chips.map((chip) => (
           <button key={chip.id} type="button" disabled={pending} onClick={() => onPick(chip.id)} className="px-chip min-h-11 px-3 text-fg disabled:opacity-40">
@@ -847,6 +910,22 @@ function NamePanel({
         ))}
       </div>
     </div>
+  );
+}
+
+function Notebook({ notes }: { notes: RoomView["notes"] }) {
+  if (notes.length === 0) return null;
+  return (
+    <ul className="mt-3 space-y-2">
+      {notes.map((note, index) => (
+        <li key={`${note.text}-${index}`} className="px-say flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+          <span className="text-fg">{note.text}</span>
+          <span className={note.pull === "tight" ? "text-tide" : note.pull === "bolt" ? "text-warn" : "text-muted"}>
+            {note.pull === "tight" ? "Warm" : note.pull === "bolt" ? "Cold" : note.pull === "skip" ? "No tap" : "Flat"}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

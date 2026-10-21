@@ -27,7 +27,7 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
   const [index, setIndex] = useState(0);
   const [scores, setScores] = useState<Map<string, number>>(() => initialScores());
   const [net, setNet] = useState(0.22);
-  const [pull, setPull] = useState<"idle" | "tight" | "bolt" | "miss">("idle");
+  const [pull, setPull] = useState<"idle" | "tight" | "bolt" | "miss" | "skip">("idle");
   const [tapped, setTapped] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [leftMs, setLeftMs] = useState(DEAL_MS);
@@ -78,8 +78,8 @@ export function DrillPlay({ onExit, onScore }: { onExit: () => void; onScore: (p
     if (lockRef.current || phase !== "deal" || !deal) return;
     lockRef.current = true;
     if (side < 0) {
-      setPull("miss");
-      play("miss");
+      setPull("skip");
+      play("dead");
     } else {
       const text = side === 0 ? deal.left : deal.right;
       setTapped((lines) => [...lines, text]);

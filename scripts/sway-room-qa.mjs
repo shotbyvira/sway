@@ -33,8 +33,8 @@ async function crewCast(page) {
   const blur = (await page.locator("span.text-fg").first().innerText()).trim();
   await page.getByLabel("Your cast").fill(blur);
   await page.getByRole("button", { name: /Cast ·/ }).click();
-  await page.getByText("Rejected").waitFor({ timeout: 8000 });
-  for (const line of ["zzzzqq", "it is large", "something round"]) {
+  await page.getByText(/Thrown back/).waitFor({ timeout: 8000 });
+  for (const line of ["it is large", "something round"]) {
     await page.getByLabel("Your cast").fill(line);
     await page.getByRole("button", { name: /Cast ·/ }).click();
     await Promise.race([

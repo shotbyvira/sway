@@ -3,8 +3,16 @@
   "name": "sway",
   "compatibility_date": "2026-10-21",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  "main": "src/worker.ts",
   "observability": {
     "enabled": true
-  }
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "SwayRoom" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1-sway-room", "new_sqlite_classes": ["SwayRoom"] }
+  ]
 }
